@@ -1,0 +1,54 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mochi Grain</string>
+    <string name="title_activity_main">Mochi Grain</string>
+    <string name="package_name">com.mochigrain.app</string>
+    <string name="custom_url_scheme">com.mochigrain.app</string>
+
+    <!-- ═══ Native BLE monitoring notifications (en = default) ═══
+         NOTE: the app's 'hinglish' language intentionally falls back to
+         these romanized-EN defaults — no values-hinglish folder exists
+         (Android resolves unknown locales to values/). -->
+
+    <!-- Channels -->
+    <string name="notify_channel_critical_name">Critical grain alerts</string>
+    <string name="notify_channel_critical_desc">Immediate moisture or temperature danger for stored grain</string>
+    <string name="notify_channel_warnings_name">Grain warnings</string>
+    <string name="notify_channel_warnings_desc">Early storage-risk warnings from the grain probe</string>
+    <string name="notify_channel_status_name">Monitoring status</string>
+    <string name="notify_channel_status_desc">Quiet connection status for the grain probe</string>
+
+    <!-- Titles -->
+    <string name="notify_title_warning_moisture">Moisture warning</string>
+    <string name="notify_title_warning_temperature">Temperature warning</string>
+    <string name="notify_title_critical_moisture">Moisture critical</string>
+    <string name="notify_title_critical_temperature">Temperature critical</string>
+    <string name="notify_title_battery">Probe battery low</string>
+    <string name="notify_title_disconnected">Probe disconnected</string>
+    <string name="notify_recovered">Back to safe</string>
+
+    <!-- Status (foreground service) -->
+    <string name="notify_status_monitoring">Monitoring %1$s · last reading %2$s</string>
+    <string name="notify_status_sleeping">Monitoring %1$s · probe sleeping · last reading %2$s</string>
+    <string name="notify_status_last_reading">last reading %1$s</string>
+    <string name="notify_status_waiting">Monitoring %1$s · waiting for first reading</string>
+
+    <!-- Ages (computed from the real lastPacketAt only) -->
+    <string name="notify_age_now">just now</string>
+    <string name="notify_age_min">%1$d min ago</string>
+    <string name="notify_age_hr">%1$d h ago</string>
+    <string name="notify_age_day">%1$d d ago</string>
+    <string name="notify_age_never">no reading yet</string>
+
+    <!-- Alert body: %1 grain profile, %2 value, %3 unit, %4 threshold crossed, %5 unit -->
+    <string name="notify_text_alert">%1$s: %2$s%3$s (limit %4$s%5$s)</string>
+    <string name="notify_text_battery">Probe battery at %1$d%% — below the 15%% alert line.</string>
+    <string name="notify_text_disconnected">No data from %1$s. Last packet %2$s.</string>
+    <string name="notify_recovered_text">%1$s is back inside safe limits.</string>
+
+    <!-- Corrective guidance -->
+    <string name="notify_guidance_moisture">Spread out or dry the grain batch now to stop spoilage.</string>
+    <string name="notify_guidance_temperature">Move the bin to shade and improve airflow.</string>
+    <string name="notify_guidance_battery">Recharge or replace the probe battery soon.</string>
+    <string name="notify_guidance_disconnect">Bring the probe within range or wake it to resume monitoring.</string>
+</resources>

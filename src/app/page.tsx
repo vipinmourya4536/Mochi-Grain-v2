@@ -17,6 +17,10 @@ import type { AppLanguage } from '@/lib/i18n';
 import { primeAlertSound } from '@/lib/alert-sound';
 import { initBackNav, syncBackNav } from '@/lib/back-nav';
 import { computeGlassVars } from '@/lib/glass';
+import { registerServiceWorker, useSwUpdate } from '@/lib/sw-registration';
+import { initNativeShell, syncStatusBar } from '@/lib/capacitor-bridge';
+import { ConnectivityRibbon } from '@/components/grain/connectivity-ribbon';
+import { t } from '@/lib/i18n';
 
 const LANG_MAP: Record<string, string> = {
   en: 'en', hi: 'hi', mr: 'mr', hinglish: 'en',
@@ -46,7 +50,7 @@ function computeThemeColor(isDark: boolean): string {
 export default function GrainMonitorPage() {
   const {
     activeTab, deviceState, riskTheme, currentReading, settings, btAvailable,
-    loadSettings, loadHistory, setBtAvailable,
+    loadSettings, loadHistory, setBtAvailable, restoreNativeSession,
   } = useGrainStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,10 +61,34 @@ export default function GrainMonitorPage() {
     [isDark, settings.glassOpacity]
   );
 
-  // Sync body background with theme to prevent black/white bar
+  // Sync body background with theme to prevent black/white bar.
+  // On native (Capacitor) also repaint the Android system bar with the
+  // same neutral chrome pair — no-op on the web.
   useEffect(() => {
     document.body.style.background = isDark ? '#09090b' : '#f5f5f7';
+    syncStatusBar(isDark);
   }, [isDark]);
+
+  /* ── Offline layer + native shell ──
+   * Registers /sw.js once. After the first visit the app shell, bundles
+   * and icons are cached: Home / History / Settings and the Mochi engine
+   * cold-start with no internet (all data lives in IndexedDB). A new
+   * deployed version is surfaced as a user-approved banner — never an
+   * auto-reload — and SW version bumps never touch IndexedDB.
+   *
+   * Capacitor shell: inside the Android APK the same effect wires the
+   * hardware Back listener + splash hide (initNativeShell). On the web
+   * it is a no-op — every plugin call is dynamically imported and
+   * guarded by Capacitor.isNativePlatform(), so browser behavior is
+   * 100% unchanged. The bundled sw.js is harmless inside the WebView
+   * (same-origin https://localhost, bundle versions always match). */
+  useEffect(() => {
+    registerServiceWorker();
+    restoreNativeSession(); // native only — re-attach to a live service session (web no-op)
+    return initNativeShell();
+  }, []);
+
+  const { updateReady, applyUpdate } = useSwUpdate();
 
   // Prime the alert-sound AudioContext on the first user gesture so browser
   // autoplay policies never block the warning/critical chimes later.
@@ -182,6 +210,23 @@ export default function GrainMonitorPage() {
       <Header />
       <Toast />
       <main className="grain-scroll" ref={scrollRef}>
+        {/* Internet state ribbon — BLE/device states are separate (Home hero).
+            Lives inside the scroll content because the header is a floating
+            frost layer that content flows underneath. */}
+        <ConnectivityRibbon />
+        {updateReady && (
+          <div className="grain-update-banner" role="status">
+            <span className="grain-update-dot" aria-hidden="true" />
+            <span className="grain-update-label">{t('update.available', settings.language as AppLanguage)}</span>
+            <button
+              type="button"
+              className="grain-update-btn"
+              onClick={applyUpdate}
+            >
+              {t('update.reload', settings.language as AppLanguage)}
+            </button>
+          </div>
+        )}
         {/* key={activeTab} retriggers the subtle 220ms enter transition on tab switch */}
         <div key={activeTab} className="grain-tab-enter">
           {activeTab === 'home' && renderHomeState()}

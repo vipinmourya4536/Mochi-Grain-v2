@@ -1,0 +1,609 @@
+I've re-checked the current [`Mochi-grain`](https://github.com/vipinmourya4536/Mochi-grain?utm_source=chatgpt.com)[ repository](https://github.com/vipinmourya4536/Mochi-grain?utm_source=chatgpt.com) and both screenshots. The revised prompt pack needs to address not only the Android conversion, but also the distinction between actual sensor measurements, estimated values, and fabricated data.
+
+A few existing features are worth preserving and improving instead of rebuilding: Mochi's decision engine already identifies itself as v2.0, the settings model already has a `glassOpacity` field, and the app already stores readings in IndexedDB. The work should complete these systems, remove the demo pipeline entirely, and produce a genuine production-ready Android build.
+
+Your screenshots establish three specific visual requirements:
+
+- The Android status-bar/top region should remain monochrome: near-black in dark mode and near-white in light mode, never orange simply because orange is selected as the accent.
+- The moisture threshold sliders should live inside collapsed Advanced Settings, matching your second reference.
+- The interface should have richer, adjustable liquid-glass reflections and translucency, while keeping text, charts and sensor readings legible.
+
+# Mochi Grain v2: production upgrade prompt pack
+
+Use the following prompts sequentially in your coding agent. They are tailored to your existing Next.js + React + TypeScript + Zustand project, not a greenfield rewrite.
+
+Target repository
+
+[vipinmourya4536/Mochi-grain](https://github.com/vipinmourya4536/Mochi-grain?utm_source=chatgpt.com)
+
+Default branch: `main` · Preserve the working production app during migration.
+
+Recommended implementation order
+
+Audit → Back navigation → Remove demo data → Visual polish → History redesign → Native packaging → BLE background service → Notifications → Offline caching → Hardware accuracy → Version 2 release QA
+
+## Prompt 1: Audit the repository and establish production requirements
+
+You are the senior engineer responsible for bringing Mochi Grain Moisture Monitor to production quality.
+
+Repository: [https://github.com/vipinmourya4536/Mochi-grain](https://github.com/vipinmourya4536/Mochi-grain)
+
+Read the current repository and inspect the actual source before making changes.
+
+Known architecture includes Next.js, React, TypeScript, Zustand, IndexedDB using `idb`, a PWA manifest, Web Bluetooth, and a rule-based grain decision engine.
+
+Inspect at minimum:
+
+- `package.json`, `next.config.ts`
+- `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`
+- `src/lib/grain-store.ts`, `src/lib/grain-types.ts`
+- `src/lib/bluetooth.ts`, `src/lib/offline-storage.ts`, `src/lib/pwa.ts`
+- `src/lib/mochi-engine.ts`
+- `src/components/grain/header.tsx`
+- `src/components/grain/bottom-nav.tsx`
+- `src/components/grain/settings/settings-tab.tsx`
+- `src/components/grain/history/history-tab.tsx`
+- `public/manifest.json`
+- Existing deployment configuration, server-only modules, database code, tests, and work log.
+
+Use the latest default branch as the source of truth. Do not assume earlier notes or prompts exactly match the current repository.
+
+Produce a technical assessment of navigation, demo-data generation, sensor parsing, threshold rules, alerts, online dependencies, persistence, glass styling, and the history interface.
+
+Important existing details to investigate:
+
+- `src/lib/mochi-engine.ts` currently declares version 2.0. Determine whether the implementation already satisfies the intended v2 requirements before changing its version or rules.
+- `AppSettings.glassOpacity` already exists, but `src/app/page.tsx` currently calculates glass properties with a fixed opacity. Determine how to make the existing slider actually control every relevant visual surface.
+- Threshold sliders currently appear in the regular Settings tab and need to move into Advanced Settings.
+- Demo generation is implemented inside the grain store and connected to the settings interface. Find and remove every generation and persistence path, not merely the visible button.
+- `public/manifest.json` exists, but that alone does not establish that service-worker caching or offline startup is implemented.
+- `next.config.ts` uses standalone output. Investigate server-side dependencies before proposing a static export or a locally bundled Capacitor application.
+- `src/lib/bluetooth.ts` holds the selected browser BLE device in module-level state. This is insufficient for reliable recovery after a page reload.
+
+Return a phased implementation plan with exact files, dependencies, migration concerns, acceptance tests, and failure risks.
+
+Do not change code in this step. Do not invent device capabilities, test results, firmware behavior, or support for background execution.
+
+## Prompt 2: Fix Android Back navigation first
+
+Implement and verify the first user-visible fix in the existing Mochi Grain PWA.
+
+Primary bug: Android Back navigation or the mobile system Back gesture can close the app while the user is on History, Settings, or Discover, instead of returning to Home.
+
+Inspect the real navigation and overlay state in `src/app/page.tsx`, `src/lib/grain-store.ts`, the bottom navigation, and the history/settings components.
+
+Requirements:
+
+1. Pressing Back on any secondary tab returns to Home.
+2. Back closes the topmost modal, sheet, confirmation dialog, or history detail first.
+3. Back must never disconnect the probe, clear sensor readings, delete history, reset settings, or alter monitoring preferences.
+4. Avoid duplicate history entries, navigation loops, stale React state, and listeners added on every render.
+5. Preserve the existing bottom navigation and its animations.
+6. Do not implement a homemade swipe detector that interferes with Android's system edge gesture.
+7. Use the History API and `popstate` appropriately for the PWA.
+8. Keep the navigation policy reusable for a future Capacitor native Back listener.
+9. Normal exit behavior from Home should remain possible. Do not create an endless sequence of artificial browser history entries.
+
+Inventory all currently openable overlays and give them an explicit Back priority. Modal-specific close actions must not accidentally trigger the parent tab's Back handler.
+
+Add automated tests for secondary-tab return, nested overlay closure, repeated Back presses, rapid tab switching, and preservation of BLE and settings state.
+
+Run the existing type checks, lint, and build. Fix any errors caused by this implementation.
+
+Test on a real Android device when available. Report automated results and physical gesture results separately. Do not claim device testing occurred when it did not.
+
+Commit the fix separately or create an isolated branch where repository permissions permit it. Do not combine this task with UI redesign or BLE migration.
+
+## Prompt 3: Remove demo mode and enforce real-data-only operation
+
+Remove demo mode and every source of synthetic sensor measurements from Mochi Grain.
+
+The final product must operate on actual ESP32 hardware measurements only. There must be no demo dashboard, simulated reading generator, sample sensor history, fake connection state, random temperature or moisture data, or seeded test data shipped as a usable monitoring mode.
+
+Inspect the entire repository for:
+
+- `DEMO_INTERVAL_PRESETS`
+- `demoMode`, `demoIntervalSec`, `enableDemoMode`, `disableDemoMode`
+- `_demoTimer`, `_demoTick`, `generateDemoReading`, `generateDemoHistory`, `seededRandom`
+- Any demo chip in the header
+- Demo-specific settings sections and translations
+- Demo-specific IndexedDB records and cleanup paths
+- Hard-coded sensor readings, fake connected devices, fallback measurements, placeholder battery percentages, and simulated BLE packets.
+
+Remove all demo-generation paths from production code, remove their controls from Advanced Settings, and remove the demo chip from the header.
+
+Simplify the grain store so that connection status and readings reflect actual device events only. Remove demo-only imports, state, timer management, helper functions, and UI branches.
+
+Review `src/lib/offline-storage.ts` carefully. Migrate or clean old demo records without deleting real user history. Preserve all legitimate readings, bookmarks, settings, exports, and backups.
+
+Do not delete a general history-clear function or legitimate test infrastructure merely because its names overlap with demo-related features. Keep synthetic fixtures isolated inside automated tests and never insert them into normal application storage.
+
+When no genuine readings exist, Home must display an honest empty state such as "No readings yet" or "Connect your probe." Do not fabricate values to make the interface look populated.
+
+Sensor telemetry must distinguish:
+
+- A live reading received from the physical probe.
+- A previously saved reading, with its original timestamp.
+- A disconnected or stale sensor state.
+- An unavailable or invalid measurement.
+
+Never present cached data as live telemetry. Never replace a missing value with zero, a default temperature, or a random fallback.
+
+A connection must not imply that valid measurements have arrived.
+
+Inspect and remove remaining demo references in headers, settings, store types, translations, and exports. Update tests so no synthetic records can enter production storage.
+
+Run repository-wide searches, tests, TypeScript checks, lint, and build. Report every remaining intentional fixture and prove that it is confined to test code.
+
+## Prompt 4: Fix the status bar and build the adjustable liquid-glass interface
+
+Polish the Mochi Grain interface into a refined production-grade liquid-glass design inspired by iOS frosted glass.
+
+Use the supplied screenshots as design references. Preserve the information hierarchy and existing navigation, and do not turn the app into a decorative mockup.
+
+### A. Fix the top status-bar region
+
+The first reference shows an Android status bar with an orange-brown region. It looks wrong because the status-bar color changes with the selected orange accent.
+
+Change the behavior so that system chrome is controlled by the dark/light theme, not the accent color.
+
+Dark theme:
+
+- Status-bar/background region uses the same near-black or dark-neutral color family as the app.
+- Header background remains monochrome and blends into the app.
+- No orange or other accent-colored band is visible behind the Android clock and system icons.
+
+Light theme:
+
+- Status bar and header use white or subtle off-white neutral tones.
+- Keep system icons legible and respect Android edge-to-edge and safe-area behavior.
+
+The selected accent may color interactive controls, the active bottom navigation item, selected slider thumbs, small indicators, and deliberate highlights. It must not recolor the entire status bar or top shell.
+
+Inspect `src/app/page.tsx`, `src/app/layout.tsx`, `public/manifest.json`, the CSS theme selectors, and the native status-bar configuration once Capacitor is introduced.
+
+Make the PWA and Android shell consistent where the platform allows. Explicitly handle theme-color metadata and Android system-bar settings; changing HTML alone may not be enough in the native wrapper.
+
+### B. Create richer liquid glass
+
+Keep the existing CSS design tokens and the `glassOpacity` preference where practical.
+
+The interface should feature:
+
+- Frosted translucent header and bottom navigation.
+- Subtle layered blur, background diffusion, and saturation.
+- Fine inner highlights and reflective edge lines.
+- Soft specular reflections that suggest glass thickness.
+- Restrained light refraction-like gradients and restrained depth.
+- Floating glass surfaces for cards, sheets, notifications previews, and controls.
+- Smooth, understated transitions with no unnecessary bounce or excessive glow.
+
+Do not use heavy blur on every text container. Text and sensor readings must remain crisp. Ensure alerts, threshold colors, connection states, and charts remain readable in both themes.
+
+### C. Make glass intensity controllable
+
+`AppSettings.glassOpacity` already exists, but `src/app/page.tsx` currently derives glass CSS variables with a fixed value of 0.75. Connect the existing setting to the real rendering pipeline.
+
+Create one well-defined mechanism to derive glass variables from the saved preference. Adjust blur radius, translucency, saturation, reflections, highlights, borders, and shadows cohesively.
+
+Add a clearly labeled glass-intensity slider in Advanced Settings. Give it an accessible label, sensible minimum and maximum values, a visible percentage/value, and immediate preview.
+
+Persist the setting using the current settings persistence mechanism. It must survive reloads, theme switches, and Android app restarts.
+
+Low intensity should remain relatively subtle; high intensity should offer noticeably more pronounced frosting and reflection without harming legibility or performance.
+
+Respect `prefers-reduced-motion` and avoid GPU-heavy continuous animations. Where `backdrop-filter` is unsupported, use a deliberate opaque/semitransparent fallback.
+
+### D. Keep accents separate
+
+Keep the existing accent choices, but make accents use a restrained palette system. Do not let accent selection alter the neutral status-bar color.
+
+Test dark and light themes against all current accent options.
+
+Deliver a refined visual implementation, not merely new CSS variables. Inspect the actual page on narrow mobile widths and fix clipping, safe-area overlap, or excessive glass opacity.
+
+## Prompt 5: Move threshold sliders into Advanced Settings
+
+Refactor the grain threshold settings in Mochi Grain to match the provided second screenshot.
+
+Current behavior: `src/components/grain/settings/settings-tab.tsx` displays moisture threshold sliders in the main Settings interface. Move them into the existing collapsible Advanced Settings section.
+
+Requirements:
+
+1. Remove the dedicated threshold section from the main Settings view.
+2. Add a clearly named "Moisture Thresholds" section inside Advanced Settings.
+3. Reproduce the reference's compact layout with SAFE, WARNING, and CRITICAL rows, visible numerical thresholds, horizontal sliders, rounded card edges, and subtle shadows.
+4. Keep the section visually refined and responsive rather than copying the screenshot's exact dimensions.
+5. Persist changes through the existing `updateSettings` flow.
+6. Keep each slider synchronized with `settings.thresholds`.
+7. Preserve all current grain profiles and the user's chosen grain.
+8. Validate threshold ordering and prevent invalid combinations. A safe threshold must remain lower than the warning threshold, and warning lower than critical, or a clearly defined alternative model must be documented.
+9. Do not silently change grain-specific calibrated defaults simply to make slider values look consistent.
+10. Make the section collapsible with the existing Advanced Settings controls.
+11. Keep sliders accessible and functional with touch, keyboard, and screen readers.
+12. Localize labels and descriptions in English, Hindi, Marathi, and Hinglish.
+
+If temperature thresholds are already supported by the engine and are intended to be user-adjustable, provide a separate Advanced Settings section for temperature thresholds rather than mixing them with moisture controls. Do not introduce unvalidated hardware claims.
+
+Automated tests must verify threshold persistence, valid ordering, updating Mochi's next evaluation, theme compatibility, and correct behavior after a reload.
+
+Do not modify the BLE protocol or the visual structure of Home, History, Discover, and the bottom navigation.
+
+## Prompt 6: Redesign History into a clean, minimal analytics experience
+
+Redesign the current Mochi Grain History tab. The current `src/components/grain/history/history-tab.tsx` is dense with charts, summary cards, trends, scores, and many data elements.
+
+The goal is not to remove analytical power. It is to make important information effortless to understand at a glance.
+
+Inspect the entire History view, `src/components/grain/history/trends-chart.tsx`, `src/components/grain/history/detail-sparkline.tsx`, `src/lib/grain-store.ts`, and the existing history data model.
+
+### Information hierarchy
+
+At the top, show a compact summary:
+
+- Latest recorded reading and its timestamp.
+- Current connection/freshness status, explicitly distinguished from saved history.
+- A simple moisture trend.
+- A concise status from Mochi, with a clear severity indicator.
+
+Below it, provide one clean primary chart at a time. Moisture should be the default metric, with a simple accessible option to view temperature. Avoid multiple overlapping chart cards and duplicate summaries.
+
+The chart should have:
+
+- A readable time axis.
+- A restrained number of ticks.
+- Minimal grid lines.
+- Clear moisture percentage or temperature units.
+- Distinct and legible warning/critical threshold lines, where meaningful.
+- A sensible default time range, with optional 24-hour, 7-day, and longer ranges when sufficient data exists.
+- Tooltips or point selection for details instead of permanently showing every data value.
+
+Show a compact chronological list of readings under the main chart. Each row should prioritize timestamp, moisture, temperature, and meaningful risk state. Opening a row can show additional detail, including the local sparkline and Mochi's explanation.
+
+Move secondary summaries, long-range analytics, export options, detailed statistics, and advanced chart controls into an appropriate secondary area or expandable section.
+
+Avoid repeating the same moisture statistics in three different cards. Do not fill the screen with moving averages, crossing markers, score explanations, and trend indicators simultaneously.
+
+### Real-data-only requirements
+
+The History tab must render real received and genuinely stored readings only.
+
+With no history, show a polished empty state that invites the user to connect the actual probe. Do not generate an artificial curve or sample readings.
+
+Handle large histories efficiently. Avoid recomputing every historical analysis on every render. Keep scrolling smooth on lower-powered Android phones.
+
+Preserve history export, data backup/restore, timestamps, and any valid existing functionality. Do not discard the underlying records just because the presentation has been simplified.
+
+### Visual requirements
+
+Use the adjustable liquid-glass theme created in Prompt 4. Keep glass effects subtle on chart plotting regions so the data remains clear. Use semantic warning colors without making the whole interface amber or red.
+
+Test in dark and light modes, narrow mobile viewports, no-data state, single-reading state, and large histories.
+
+Deliver a clean visual result and report which chart elements were retained, simplified, moved, or removed.
+
+## Prompt 7: Upgrade the Mochi Decision Engine to a verified v2 release
+
+Review and formalize Mochi Decision Engine v2 as a production-quality, deterministic, offline-first expert system.
+
+Current file: `src/lib/mochi-engine.ts`.
+
+Important: the current source already declares "MOCHI DECISION ENGINE v2.0". Do not merely rename it to v2. Inspect the existing implementation and identify whether the requested v2 behavior is complete. Preserve sound existing rules and improve them only where justified by measurable defects.
+
+Requirements:
+
+1. Engine evaluation must be deterministic for a given reading, previous-reading history, grain profile, and explicit configuration.
+2. Avoid hidden module-global state that makes results depend unexpectedly on which device or test was evaluated previously. Make cooldown and transition state explicit, injectable, and persistable where appropriate.
+3. Validate actual sensor inputs and clearly classify missing, stale, malformed, or implausible values. Invalid readings must never be treated as safe.
+4. Evaluate the user's selected grain profile and moisture/temperature thresholds consistently.
+5. Use timestamped historical readings for trend evaluation. Account for duplicate, out-of-order, stale, and gapped readings.
+6. Avoid escalating risk solely because two readings arrive in rapid succession or because history is temporarily unavailable.
+7. Explain why each warning or critical state was selected, with stable reason codes and actionable messages.
+8. Provide explicit safe, monitor, warning, critical, insufficient-data, stale-data, disconnected, and invalid-measurement behavior as appropriate to the existing domain model.
+9. Keep decision output machine-readable, localizable, and compatible with the existing UI.
+10. Prevent notification floods by separating risk classification from notification cooldown/deduplication.
+11. Preserve the ability to evaluate the same reading in the Android background service and web client consistently.
+
+Do not treat example moisture thresholds as universal scientific truth. Thresholds should be based on the project's documented grain profiles and the grain's intended storage conditions.
+
+Create a shared set of test vectors that covers all current grain profiles and critical transitions. Validate expected results for normal readings, rising moisture, high temperature, recovery, invalid data, stale history, and missing history.
+
+If the native monitoring implementation uses Kotlin, compare it against the TypeScript engine using the same test vectors. Do not silently maintain two inconsistent rule systems.
+
+Update the engine version metadata and app version metadata deliberately. Keep `MOCHI ENGINE v2` distinct from the overall `Mochi Grain 2.0` app version.
+
+Do not claim agricultural accuracy based on simulation. The engine classifies the supplied measurements; it does not improve the sensor's physical accuracy.
+
+## Prompt 8: Establish a proper offline-first PWA and caching layer
+
+Make Mochi Grain usable offline and resilient to weak internet connections without falsely claiming that every feature works offline.
+
+The current project has a PWA manifest and an IndexedDB storage layer, but those do not guarantee that app assets are cached or that the application can cold-start offline. Inspect actual service-worker registration and caching behavior before changing it.
+
+Implement a robust service-worker caching strategy suited to the existing Next.js architecture.
+
+### Requirements
+
+- Cache the application shell, required JavaScript bundles, styles, fonts where permitted, icons, manifest, and offline fallback assets.
+- Ensure the core interface can launch with no internet after the required resources have been cached at least once.
+- Preserve IndexedDB readings, grain settings, language preferences, saved data, and the offline Mochi engine.
+- Make Home, History, settings, and offline decision evaluation work without remote APIs when their required data is locally available.
+- Treat Discover's remote videos/content separately. Show an explicit offline state when content has not been cached.
+- Use appropriate strategies for immutable hashed assets, navigation requests, mutable content, and optional remote resources.
+- Include cache versioning, safe activation of new caches, cleanup of obsolete caches, and predictable app-update behavior.
+- Do not cache sensitive dynamic responses indiscriminately.
+- Do not use a cache hit as proof that sensor data is current.
+- Make offline, connecting, disconnected, stale reading, and weak connectivity states visually distinct.
+- Preserve local records when the application updates. Do not clear IndexedDB during a service-worker version change.
+- Avoid uncontrolled storage growth and test behavior on lower-storage devices.
+- Provide an offline fallback that is useful and visually polished.
+
+Architecture constraint: Next.js currently uses standalone output. Determine whether the selected service-worker strategy is compatible with the actual production deployment. Do not switch blindly to static export, disable server functionality, or assume the app has no server dependencies.
+
+If the Android app later bundles local assets in Capacitor, share appropriate frontend logic without coupling the Android native service to a browser-only service worker.
+
+Test first launch online, subsequent launch offline, weak connectivity, updated asset versions, cache recovery, and persisted history. Document which features genuinely work offline and which require an active internet connection.
+
+Do not introduce fabricated measurements or placeholder live states to make offline screens appear active.
+
+## Prompt 9: Build the Capacitor Android app and fix native Back behavior
+
+Package Mochi Grain as an Android application using Capacitor without rebuilding the interface from scratch.
+
+Repository: [https://github.com/vipinmourya4536/Mochi-grain](https://github.com/vipinmourya4536/Mochi-grain)
+
+Use the current official Capacitor documentation and compatible package versions:
+
+[https://capacitorjs.com/docs/getting-started](https://capacitorjs.com/docs/getting-started)
+
+[https://capacitorjs.com/docs/android](https://capacitorjs.com/docs/android)
+
+Inspect the Next.js standalone build setup first. Choose a supported architecture that can host the existing frontend and any features requiring a server. Do not force static export if Next.js server functionality or server-only modules make it invalid.
+
+Requirements:
+
+- Create the Capacitor Android project and document its application ID.
+- Preserve the existing hosted PWA and deployment.
+- Keep the current frontend, IndexedDB schema, chart behavior, internationalization, threshold rules, and glass settings.
+- Bundle assets locally where the architecture supports it so the UI can start without a network request.
+- Configure theme-aware system bars and safe areas.
+- Include a branded splash screen and launcher icons.
+- Integrate the native Back button via the official Capacitor App plugin.
+- Reuse the Back-navigation policy from Prompt 2.
+- Close the topmost detail/modal/sheet before navigating to Home.
+- On Home, follow a deliberate Android background/exit policy and never stop BLE monitoring just because the UI is backgrounded.
+- Ensure only one Back listener handles each event.
+- Preserve Android gesture navigation without custom edge-swipe interception.
+- Keep PWA-specific APIs guarded so native execution does not rely on browser-only capabilities.
+
+Do not ship an APK that simply depends on the production website being reachable unless that is a documented, deliberate architecture choice. Explain how offline startup, updates, and server-dependent routes work in the chosen design.
+
+Add build scripts and instructions. Compile a debug APK when tooling is available. Test app launch, tab switching, Back behavior, orientation handling if supported, and cold startup without internet.
+
+Report actual tests and any unresolved build blockers. Do not claim that a native APK has been produced until its artifact actually exists.
+
+## Prompt 10: Implement automatic native BLE reconnection and background monitoring
+
+Implement reliable Android BLE monitoring for Mochi Grain with the React WebView no longer responsible for maintaining the connection while the app is in the background.
+
+The current `src/lib/bluetooth.ts` uses Web Bluetooth and stores the device in module-level JavaScript state. The current reconnection attempts cannot by themselves restore the selection after a page reload or guarantee operation after Android suspends the browser runtime.
+
+Retain Web Bluetooth for the PWA when useful, but make the Android build use an appropriate native BLE implementation.
+
+Read the Android background BLE guidance:
+
+[https://developer.android.com/develop/connectivity/bluetooth/ble/background](https://developer.android.com/develop/connectivity/bluetooth/ble/background)
+
+Evaluate the correct native mechanism, including a `connectedDevice` foreground service and the Companion Device APIs where appropriate. Document the chosen approach and why it fits the actual ESP32.
+
+### Device association and reconnection
+
+- Let the user select and authorize the actual GRAIN-01 probe.
+- Persist the device association and monitoring configuration.
+- On later launches, reconnect to the last previously authorized device when possible without requiring repeated manual selection.
+- Do not confuse an operating-system paired-device entry with authorization for this app to access it.
+- Reconnect after temporary range loss using bounded retry intervals and backoff.
+- Recover from BLE adapter changes, recoverable connection failures, and probe wake-up.
+- Distinguish deliberate disconnects from unexpected drops.
+- Do not create duplicate GATT connections or multiple notification listeners.
+- Stop retries when the user explicitly stops monitoring.
+- Make the active connection state, last successful reading timestamp, and error reason available to the UI.
+
+### Background monitoring
+
+When monitoring is explicitly enabled, the native service must receive real ESP32 characteristic notifications with the display off and the React WebView suspended.
+
+Use persistent native state for the selected device, last valid reading metadata, relevant monitoring preferences, and required threshold configuration.
+
+Persist real readings to a reliable local native store or a carefully synchronized data layer. Do not assume that the native Android service can use the WebView's IndexedDB directly. Prevent duplication and data loss when syncing native measurements into the existing web history.
+
+Keep the established BLE UUIDs and command protocol unless actual firmware inspection proves a change is required. Verify packet length, units, byte order, status fields, and firmware compatibility. Do not infer missing fields.
+
+Inspect firmware advertising and sleep behavior. If the device stops advertising while asleep, document the limits and any necessary firmware modification instead of promising impossible auto-discovery.
+
+Handle Android runtime permissions and required manifest entries. Do not request unrelated permissions. Minimize battery drain and avoid indefinite high-frequency scanning.
+
+Test reconnect state transitions and service lifecycle in automated tests, then validate with the actual ESP32 on a physical phone. Distinguish mocked and real hardware results.
+
+The service must not fabricate data during disconnection. Out-of-range status must remain explicit until a genuine reading arrives.
+
+## Prompt 11: Build native notifications that alert for real sensor risks
+
+Implement production-grade Android system notifications for Mochi Grain warnings and critical storage conditions.
+
+The current `pushAlerts` preference, in-app toasts, and Web Audio chimes are not a substitute for Android notification delivery independent of the UI.
+
+Integrate notification processing with the native BLE monitoring service created in Prompt 10.
+
+### Notification behavior
+
+- Create notification channels for critical storage risks, warnings, and monitoring/connectivity status.
+- Request notification permission appropriately on supported Android versions.
+- Generate notifications from genuine sensor data received by the native service, with the app UI backgrounded or suspended.
+- Reuse the user's selected grain, relevant moisture/temperature thresholds, language, and alert preferences.
+- Keep native and TypeScript risk classification consistent by validating the same rule test vectors against both implementations.
+- Do not alert on fake values, missing measurements, stale cached data, or unverified assumptions.
+- Clearly identify whether the issue concerns moisture, temperature, device battery, disconnection, or a sensor/measurement error.
+- Include a real measured value, its unit, the relevant threshold, the grain profile, severity, and useful corrective guidance.
+- Deduplicate unchanged alerts and implement sensible cooldowns.
+- Allow genuine escalation from warning to critical to trigger a new alert.
+- Support recovery notifications where appropriate and avoid noisy repeated safe-state announcements.
+- Make `pushAlerts` actually enable or disable relevant notifications.
+- Keep sound settings and Android notification channel behavior coherent.
+- Respect English, Hindi, Marathi, and Hinglish.
+- Ensure notification taps open Mochi and show the relevant state or reading.
+
+Persist notification event metadata so the History/alerts experience remains consistent after process restart.
+
+Do not create an unneeded server or require internet push delivery for locally received BLE alarms. This app's local monitoring notification path should work offline.
+
+Test granted/denied permission, disabled alerts, repeated readings, cooldown, warning-to-critical escalation, recovery, app backgrounding, and phone reboot/restart behavior where supported.
+
+Validate alert delivery with the phone locked and actual hardware. Automated unit tests alone do not establish background notification reliability.
+
+## Prompt 12: Hardware measurement accuracy and data quality
+
+Improve the integrity and accuracy of measurements throughout Mochi Grain. This is a hardware measurement system, not a simulated dashboard.
+
+The software must never claim that a measurement is scientifically accurate merely because it has been formatted, rounded, or passed through the Mochi engine.
+
+Inspect the real ESP32 firmware, hardware specifications, sensor models, calibration constants, BLE packet format, and app parser before changing measurement calculations.
+
+### Capacitive moisture sensing
+
+Establish what the physical capacitive probe measures. Do not automatically interpret an ADC reading as grain moisture percentage.
+
+If the hardware produces raw ADC counts, preserve raw readings and implement a documented calibration pipeline with:
+
+- ADC resolution and input range.
+- Sensor supply/reference voltage if relevant.
+- Dry/wet calibration points or validated grain calibration data.
+- Grain-specific relationships where supported by evidence.
+- Temperature compensation only where justified by the hardware characterization.
+- Noise filtering or repeated sampling based on documented hardware behavior.
+- Calibration version, units, status, and provenance.
+
+Do not copy soil-moisture calibration curves into a grain moisture product without validating that they apply to this specific sensor and grain. Do not use generic calibration constants as proven measurements.
+
+### Temperature
+
+Inspect the actual temperature sensor and conversion code. Validate units, signed/unsigned decoding, byte order, measurement range, and rounding. Distinguish sensor readings from unavailable, disconnected, malformed, or physically implausible values.
+
+### Other hardware telemetry
+
+Validate battery reporting, signal quality, probe state, RTC timestamps, and any device status fields against actual firmware behavior. Do not display a constant battery percentage, fabricated signal strength, or placeholder firmware version as live telemetry.
+
+### Quality and provenance
+
+Extend the reading model only where necessary to represent:
+
+- Raw hardware values.
+- Calibrated values.
+- Units.
+- Capture timestamp and source.
+- Calibration/configuration version.
+- Validity/error status.
+- Whether the reading is live or historical.
+
+Store the real measured values and preserve the original sample timestamp. Do not silently interpolate or replace missing measurements. Filtering may produce a separate derived value but must not erase the original raw measurement.
+
+### Rule engine integration
+
+Feed only valid, appropriately calibrated values into the risk engine. If calibration is not established, clearly identify the value as raw/unverified and avoid presenting it as a proven grain moisture percentage.
+
+Add hardware parser tests using actual known firmware packets and calibration validation tests using real reference measurements. Record the accuracy/error metrics obtained from hardware experiments. Do not invent a precision figure.
+
+Coordinate any protocol or firmware changes with the device's actual ESP32 implementation. Do not alter the app and firmware packet format independently.
+
+## Prompt 13: Refine production language, versioning, and reliability
+
+Prepare Mochi Grain for a coherent v2 production release.
+
+The app and the decision engine have separate versions. The engine source currently declares `MOCHI DECISION ENGINE v2.0`, so inspect that implementation rather than resetting or arbitrarily relabeling it. Set a consistent application version of 2.0.0 using the appropriate package, native Android, and release metadata once the migration is complete.
+
+Requirements:
+
+- Remove demo-related UI, code, translations, assets, and outdated help text.
+- Update version and About information consistently.
+- Make connection, monitoring, and alert states explicit.
+- Clearly distinguish last received data from live data.
+- Never invent a current reading when the probe is unavailable.
+- Provide clear permission, sensor error, calibration, BLE reconnecting, offline, and no-history states.
+- Preserve the existing supported languages.
+- Ensure settings updates are validated and persisted without corrupting old records.
+- Preserve backup/export functionality.
+- Verify first installation and upgrade from an existing installation.
+- Check that service-worker updates do not wipe user history.
+- Check that changes to native storage and IndexedDB do not create duplicate records.
+- Verify that background monitoring survives ordinary app switching, while accurately handling system restrictions.
+- Avoid unnecessary dependencies and keep mobile performance smooth.
+- Audit logs and error reporting for leaked secrets or user data.
+- Remove obsolete demo code only after confirming legitimate history and settings data are retained.
+- Keep the PWA deployable throughout the migration.
+
+Do not mark the release final because the interface looks correct. Require actual build checks, navigation regression tests, real hardware validation, offline startup checks, and notification verification.
+
+Produce a release checklist and document any remaining limitations. Never mark a test as passing unless the test was actually executed.
+
+## Prompt 14: Final production-level QA and APK release
+
+Perform final quality assurance for Mochi Grain 2.0.0.
+
+Repository: [https://github.com/vipinmourya4536/Mochi-grain](https://github.com/vipinmourya4536/Mochi-grain)
+
+Review all implemented phases. Do not add unrelated features or do a wholesale redesign during QA.
+
+### Navigation
+
+Verify Back on all secondary tabs, Back on Home, open modal/detail closure, browser Back, native Android Back, and system edge gesture behavior. Confirm that navigation never disconnects monitoring or discards user data.
+
+### Real data
+
+Search the production bundle and source for remaining demo generation, seeded random values, fake sensor packets, placeholder telemetry, synthetic connection states, and fabricated history insertion. Separate legitimate automated test fixtures from production application code.
+
+### Visual quality
+
+Verify the top status bar in dark and light themes with every accent. Confirm that the orange accent never leaks into the whole status-bar region. Test the glass-intensity slider at minimum, middle, and maximum; test persistence and reduced motion. Verify that glass effects do not make important text difficult to read.
+
+### Settings and History
+
+Confirm thresholds exist in Advanced Settings rather than the main settings view. Verify threshold ordering, persistence, and effects on real engine evaluations. Check the redesigned History with zero readings, one reading, many readings, both themes, and all supported languages. Ensure charts remain clean and useful rather than cluttered.
+
+### Offline PWA
+
+Test a first online launch, a subsequent cold start with no internet, offline navigation, cached static assets, existing local history, service-worker updates, and recovery after a failed cache update.
+
+### Android BLE and notifications
+
+On a physical Android device and the actual ESP32, verify authorization, reconnect after range loss, app backgrounding, screen locked, native monitoring status, real sensor history, warning notification, critical escalation, recovery, notification permission denial, and explicit stop/disconnect behavior.
+
+### Build and distribution
+
+Run actual type checks, lint, unit tests, native project synchronization, and production build. Create a debug APK if the build environment supports it. Document the release signing procedure without including private signing keys or secrets in the repository.
+
+Return a test matrix with:
+
+- Test description.
+- Environment/device.
+- Command or manual steps.
+- Actual result.
+- Pass/fail/not tested status.
+- Remaining risk.
+
+Do not claim physical BLE tests succeeded without testing the actual hardware. Do not claim offline startup is complete based only on a manifest file. Do not claim an APK exists until the APK has been generated and its output path verified.
+
+Deliver the exact APK location if produced, release instructions, all remaining limitations, and a summary of the final app architecture.
+
+## A few critical rules for your coding agent
+
+These are the guardrails that matter most for this project.
+
+1\. Do not treat a sensor number as ground truth simply because it arrived over Bluetooth. First establish what the ESP32 packet actually represents. Raw ADC counts, calibrated grain moisture percentage, and temperature readings are different kinds of data. Calibration needs evidence from the real hardware.
+
+2\. Never let offline caching masquerade as live sensor monitoring. Mochi can load its interface and past history offline, but fresh measurements require the probe, and the Android service must be designed to receive them.
+
+3\. Do not overwrite the existing deployment to make Capacitor work. The current app uses Next.js standalone output. The Android build must be compatible with its actual runtime requirements, while preserving the existing hosted PWA.
+
+4\. Test one stage before starting the next. In particular, do not attempt to implement native Back handling, remove demo code, redesign History, add native BLE, and rewrite the build system in one agent run. That is an excellent way to produce a beautiful interface with three broken subsystems hiding underneath it.
+
+The release goal is simple: Mochi Grain 2.0 should show genuine hardware data, explain risks using consistent rules, work offline wherever technically possible, and alert the user reliably without needing the dashboard to remain open. 🌾

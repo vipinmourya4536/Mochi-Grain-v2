@@ -89,3 +89,60 @@ export function useOnlineStatus(): boolean {
 
   return online;
 }
+
+/* ── Network quality ──
+ * Honest weak-link detection: only the OS-reported Network Information API
+ * (Chromium/Android) is used. When the browser doesn't expose it, the hook
+ * reports `unknown` — we never guess or fake a "weak" state. This describes
+ * INTERNET quality only; BLE probe quality is a separate radio path and is
+ * reported by the device/signal UI, never from here. */
+export type NetworkQuality = 'unknown' | 'strong' | 'moderate' | 'weak';
+
+interface NetworkInformationLike extends EventTarget {
+  effectiveType?: string; // 'slow-2g' | '2g' | '3g' | '4g'
+  rtt?: number; // ms
+  saveData?: boolean;
+}
+
+function classifyConnection(conn: NetworkInformationLike | undefined): NetworkQuality {
+  if (!conn || typeof conn.effectiveType !== 'string') return 'unknown';
+  // saveData = user asked the browser to be frugal → treat as constrained
+  if (conn.saveData) return 'weak';
+  if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') return 'weak';
+  // rtt is a moving OS estimate; a very high rtt even on "4g" is a weak link
+  if (typeof conn.rtt === 'number' && conn.rtt > 1400) return 'weak';
+  if (conn.effectiveType === '3g') return 'moderate';
+  return 'strong';
+}
+
+export interface NetworkStatus {
+  online: boolean;
+  quality: NetworkQuality;
+}
+
+/** Internet connectivity + quality in one hook (offline / weak / strong) */
+export function useNetworkStatus(): NetworkStatus {
+  const online = useOnlineStatus();
+  const [quality, setQuality] = useState<NetworkQuality>(() => {
+    // Lazy initializer avoids a synchronous setState inside the effect.
+    // SSR and pre-effect clients default to 'unknown'; the effect syncs.
+    if (typeof navigator === 'undefined') return 'unknown';
+    const conn = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+    return classifyConnection(conn);
+  });
+
+  useEffect(() => {
+    const conn = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+    if (!conn) return;
+    // Defer out of the effect body (consistent with useOnlineStatus)
+    const initId = setTimeout(() => setQuality(classifyConnection(conn)), 0);
+    const onChange = () => setQuality(classifyConnection(conn));
+    conn.addEventListener('change', onChange);
+    return () => {
+      clearTimeout(initId);
+      conn.removeEventListener('change', onChange);
+    };
+  }, []);
+
+  return { online, quality };
+}

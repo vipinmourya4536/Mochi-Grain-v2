@@ -1754,8 +1754,13 @@
 @media (prefers-reduced-motion: reduce) {
   .grain-tab-enter,
   .grain-fade-in,
-  .grain-nav-btn.active::before {
+  .grain-nav-btn.active::before,
+  .grain-conn-ribbon,
+  .grain-update-banner {
     animation: none !important;
+  }
+  .grain-update-btn {
+    transition: none !important;
   }
   .grain-nav-btn,
   .grain-nav-icon,
@@ -2077,3 +2082,119 @@
   transition: border-color 0.2s;
 }
 .grain-analytics-toggle:active { border-color: var(--gm-border-hover); }
+
+/* ═══════════════════════════════════════════════════════════════
+   CONNECTIVITY RIBBON — internet states (BLE states are separate)
+   ═══════════════════════════════════════════════════════════════
+   offline = solid amber glass band + CloudSlash
+   weak    = dashed amber band (OS-reported 2G/slow-2g/high-rtt only)
+   Both are honest: local data is safe, no fake "live" is implied. */
+.grain-conn-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 11px;
+  line-height: 1.4;
+  animation: grain-fade-in 0.24s ease-out;
+}
+.grain-conn-ribbon.offline {
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 34%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.grain-conn-ribbon.weak {
+  background: color-mix(in srgb, #f59e0b 7%, transparent);
+  border: 1px dashed color-mix(in srgb, #f59e0b 30%, transparent);
+}
+.grain-conn-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+}
+.grain-conn-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.grain-conn-label {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, #fbbf24 88%, var(--gm-text-primary));
+}
+.grain-conn-desc {
+  font-size: 10px;
+  color: var(--gm-text-tertiary);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   APP-UPDATE BANNER — user-approved reload (never auto)
+   ═══════════════════════════════════════════════════════════════ */
+.grain-update-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 14px;
+  background: var(--gm-glass-bg);
+  backdrop-filter: blur(var(--gm-blur-card, 22px)) saturate(var(--gm-saturate-card, 1.37));
+  border: 1px solid var(--gm-glass-border);
+  animation: grain-fade-in 0.24s ease-out;
+}
+.grain-update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gm-accent, #f97316);
+  box-shadow: 0 0 7px var(--gm-accent, #f97316);
+  flex-shrink: 0;
+}
+.grain-update-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gm-text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+.grain-update-btn {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--gm-accent, #f97316);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  flex-shrink: 0;
+}
+.grain-update-btn:active { transform: scale(0.94); filter: brightness(0.94); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DISCOVER — explicit offline state (remote content is honest)
+   ═══════════════════════════════════════════════════════════════ */
+.grain-discover-offline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  padding: 10px 13px;
+  border-radius: 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: color-mix(in srgb, #fbbf24 80%, var(--gm-text-primary));
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+}
+.grain-discover-offline svg { flex-shrink: 0; color: #f59e0b; }

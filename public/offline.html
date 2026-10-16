@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+  <title>Mochi Grain — Offline</title>
+  <style>
+    :root {
+      --bg: #f5f5f7; --card: rgba(255, 255, 255, 0.72); --border: rgba(0, 0, 0, 0.08);
+      --text: #18181b; --sub: #71717a; --accent: #f97316; --accent-soft: rgba(249, 115, 22, 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #09090b; --card: rgba(24, 24, 27, 0.66); --border: rgba(255, 255, 255, 0.09);
+        --text: #fafafa; --sub: #a1a1aa; --accent: #fb923c; --accent-soft: rgba(251, 146, 60, 0.14);
+      }
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+      -webkit-font-smoothing: antialiased;
+    }
+    .card {
+      width: 100%; max-width: 360px; text-align: center;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 24px; padding: 40px 28px 32px;
+      box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    }
+    .glyph {
+      width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-soft); color: var(--accent);
+    }
+    .glyph svg { width: 30px; height: 30px; }
+    h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+    p  { font-size: 13.5px; line-height: 1.6; color: var(--sub); margin-bottom: 4px; }
+    .note { margin-top: 14px; font-size: 12px; }
+    .safe {
+      margin-top: 18px; padding: 12px 14px; border-radius: 14px;
+      background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.18);
+      font-size: 12px; color: var(--sub); line-height: 1.55;
+    }
+    .safe b { color: #16a34a; font-weight: 600; }
+    @media (prefers-color-scheme: dark) { .safe b { color: #4ade80; } }
+    button {
+      margin-top: 22px; width: 100%; padding: 13px 16px; border: none; border-radius: 14px;
+      background: var(--accent); color: #fff; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    button:active { transform: scale(0.97); filter: brightness(0.95); }
+    .brand { margin-top: 24px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sub); opacity: 0.75; }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="glyph" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a7 7 0 0 0-7 7c-2.2.5-4 2.3-4 5a5 5 0 0 0 5 5h1" />
+        <path d="M12 2a7 7 0 0 1 7 7" /><path d="M12 9v9" /><path d="m8.5 15.5 3.5 3.5 3.5-3.5" />
+      </svg>
+    </div>
+    <h1 data-i18n="title">You’re offline</h1>
+    <p data-i18n="body">
+      Mochi Grain couldn’t reach the internet just now. Anything you already
+      opened before — or that was cached — still works.
+    </p>
+    <p class="note" data-i18n="retry_note">Check your connection, then try again.</p>
+    <div class="safe" data-i18n-html="safe">
+      <b>Your data is safe.</b>&nbsp; Readings, grain settings and history are
+      stored on this device and need no internet.
+    </div>
+    <button type="button" data-i18n="retry" onclick="location.reload()">Try again</button>
+    <div class="brand">Mochi Grain</div>
+  </main>
+  <script>
+    // Minimal honest localization of the fallback itself. The full app
+    // surface is localized inside the cached shell; this page only needs
+    // three short strings in the four supported languages.
+    (function () {
+      var T = {
+        en: {
+          title: 'You’re offline',
+          body: 'Mochi Grain couldn’t reach the internet just now. Anything cached on this device still opens.',
+          retry_note: 'Check your connection, then try again.',
+          retry: 'Try again',
+          safe: '<b>Your data is safe.</b>&nbsp; Readings, grain settings and history are stored on this device and need no internet.',
+        },
+        hi: {
+          title: 'आप ऑफ़लाइन हैं',
+          body: 'Mochi Grain अभी इंटरनेट तक नहीं पहुँच पा रहा है। इस डिवाइस पर कैश की गई चीज़ें अब भी खुलती हैं।',
+          retry_note: 'कनेक्शन जाँचें, फिर दोबारा कोशिश करें।',
+          retry: 'फिर कोशिश करें',
+          safe: '<b>आपका डेटा सुरक्षित है।</b>&nbsp; रीडिंग, अनाज सेटिंग्स और इतिहास इस डिवाइस पर सुरक्षित हैं — इंटरनेट की ज़रूरत नहीं।',
+        },
+        mr: {
+          title: 'तुम्ही ऑफलाइन आहात',
+          body: 'Mochi Grain आत्ता इंटरनेटपर्यंत पोहोचू शकत नाही. या डिव्हाइसवर कॅश केलेल्या गोष्टी अजूनही उघडतात.',
+          retry_note: 'कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.',
+          retry: 'पुन्हा प्रयत्न करा',
+          safe: '<b>तुमचा डेटा सुरक्षित आहे.</b>&nbsp; वाचने, धान्य सेटिंग्ज आणि इतिहास या डिव्हाइसवर साठवले आहेत — इंटरनेटची गरज नाही.',
+        },
+        hinglish: {
+          title: 'Aap offline ho',
+          body: 'Mochi Grain abhi internet tak nahi pahunch pa raha. Is device pe cached cheezein abhi bhi khulti hain.',
+          retry_note: 'Connection check karo, phir dobara try karo.',
+          retry: 'Dobara try karo',
+          safe: '<b>Aapka data safe hai.</b>&nbsp; Readings, grain settings aur history is device pe saved hain — internet ki zaroorat nahi.',
+        },
+      };
+      var lang = (navigator.language || 'en').toLowerCase();
+      var pick = lang.startsWith('mr') ? T.mr : lang.startsWith('hi') ? T.hi : T.en; // hinglish falls back to EN
+      document.querySelectorAll('[data-i18n]').forEach(function (el) {
+        var v = pick[el.getAttribute('data-i18n')];
+        if (typeof v === 'string') el.textContent = v;
+      });
+      document.querySelectorAll('[data-i18n-html]').forEach(function (el) {
+        var v = pick[el.getAttribute('data-i18n-html')];
+        if (typeof v === 'string') el.innerHTML = v;
+      });
+    })();
+  </script>
+</body>
+</html>

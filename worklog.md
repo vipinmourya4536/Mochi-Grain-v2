@@ -574,3 +574,87 @@ Work Log:
 
 Stage Summary:
 - Engine v2.1 is a deterministic, caller-owned-state expert system with shared test vectors; system chrome is theme-neutral in all accents; glass intensity is a real user-controlled pipeline (30–100% → cohesive blur/translucency/specular/shadow tokens) with a no-backdrop fallback; threshold editing lives in Advanced with ordering enforced at the input layer and validated by tests; History leads with a glanceable summary + single chart and parks analytics in a disclosure. 53/53 automated tests pass; all UI verified in light+dark at 390px.
+
+---
+Task ID: 15-a
+Agent: Main Agent (Z.ai Code)
+Task: Offline/PWA prompt — robust service-worker caching, offline cold start, honest connectivity states, Discover offline gating, cache versioning + predictable updates. IMPORTANT USER RULE: never push to GitHub without explicit permission.
+
+Work Log:
+- Investigated first: NO service worker existed (no sw.js, no registration; pwa.ts only had install-prompt + online hooks). App is fully client-side (no /api routes; all data IndexedDB 'grain-monitor-db' v3). Hosted deployment = Next.js standalone (server stays; no static export switch needed — SW strategy is server-agnostic).
+- NEW public/sw.js (hand-written, versioned `mochi-sw-<v>-{shell,assets,pages,media}`):
+  - Install: atomic precache of shell ('/', manifest, icons, favicon, logo, offline.html).
+  - Navigations: network-first with 6s weak-link timeout + navigationPreload; fallback cached-exact → cached '/' → offline.html.
+  - Content-hashed /_next/static (regex on hash segment) → cache-first ASSET_CACHE (dev unhashed chunks stay network-first so rebuilds aren't masked).
+  - Other same-origin GETs → stale-while-revalidate in SHELL_CACHE.
+  - Cross-origin: ONLY img.youtube.com thumbnails cached (stale-while-revalidate, opaque-OK, capped 48 entries); all other cross-origin network-only.
+  - /api/* network-only (future-proof no-sensitive-cache); non-GET network-only; non-200 never cached.
+  - Activate: deletes every mochi-sw-* cache not matching current version; NEVER touches IndexedDB.
+  - skipWaiting only via page message (SKIP_WAITING) → user-approved updates, never auto-reload.
+- NEW public/offline.html: self-contained polished fallback (theme-aware light/dark, glass card, retry button, "your data is safe" note, inline EN/hi/mr/hinglish strings).
+- NEW src/lib/sw-registration.ts: registerServiceWorker() (updateViaCache:none, waiting-worker detection), applySwUpdate() (postMessage SKIP_WAITING + one guarded reload), useSwUpdate() hook → 'New version ready / Reload' banner in page.tsx (banner inside main scroll content because the header is a floating frost layer).
+- pwa.ts: NEW useNetworkStatus() → { online, quality: strong|moderate|weak|unknown } from Network Information API only (effectiveType 2g/slow-2g, rtt>1400ms, saveData) — reports 'unknown' when API absent; NEVER guesses. Lazy state init to satisfy react-hooks/set-state-in-effect.
+- NEW src/components/grain/connectivity-ribbon.tsx: internet-state ribbon rendered INSIDE main (below floating header): offline = solid amber band + CloudSlash "Offline — your data stays on this device / Readings, history and settings are safe. Discover needs internet."; weak = dashed amber band; healthy = renders nothing; "Back online" toast on recovery. Deliberately DISTINCT from BLE states (hero LIVE/LAST READING/connecting/disconnected heroes).
+- Discover: explicit offline banner (.grain-discover-offline) with discover.offline_banner copy when offline; card metadata (bundled) still lists; thumbnails served from capped media cache when previously seen; opening videos requires network (stated in copy).
+- i18n: 7 keys × 4 languages (connectivity.offline, connectivity.offline_desc, connectivity.weak, toast.back_online, discover.offline_banner, update.available, update.reload).
+- globals.css: .grain-conn-ribbon(.offline/.weak), .grain-update-banner(+dot/btn), .grain-discover-offline; reduced-motion block extended.
+- BROWSER VERIFICATION (agent-browser + `set offline on`):
+  - SW active (scope /), shell cache 8 entries. Offline reload → FULL app renders (cold start with zero network): "OFFLINE / Offline — your data stays on this device" ribbon visible; navigator.onLine=false.
+  - All tabs offline: History renders real persisted rows (honest SAVED chip + original timestamp), Settings renders, Discover shows offline banner + 6 bundled cards. Zero console errors.
+  - Back online: ribbon clears, "Back online" toast fires.
+  - Update flow: bumped SW_VERSION v1.0.0→v1.0.1 → worker waits → banner "New version ready / Reload" → tap → exactly one reload → v1.0.1 active, ALL v1.0.0 caches deleted, v1.0.1 caches present, banner gone, waiting empty.
+  - IndexedDB preservation: ephemeral QA reading (QA-SW-PRESERVE-1) survived the entire SW version change (verified moisture 12.4 after update) then purged.
+  - Screenshots: download/r15-offline-home.png, r15-offline-history.png, r15-offline-settings.png, r15-offline-discover.png, r15-update-banner.png, r15-final-home.png.
+- bun run lint clean; tsc --noEmit 0 src errors.
+- NOT verified live (documented honestly): weak-connection visual (needs Chromium Network Information emulation or real Android; code path uses OS-reported data only), production standalone deployment SW behavior (sandbox runs dev server; strategy is server-agnostic since SW only sees HTTP), thumbnail media-cache fill (headless YouTube access).
+
+Stage Summary:
+- Mochi Grain now genuinely cold-starts offline after one visit: shell + hashed bundles + icons cached with versioned, bounded caches; Home/History/Settings + Mochi engine run entirely from IndexedDB; Discover is honestly gated; updates are user-approved with full cache-generation cleanup; SW version changes never touch user data; connectivity states are visually distinct and never fake liveness.
+
+---
+Task ID: 15-b
+Agent: General-purpose Subagent (completed by Main Agent after turn limit)
+Task: Package Mochi Grain as a Capacitor Android app without rebuilding the UI; preserve hosted PWA; bundle assets locally; native shell wiring (Back/StatusBar/Splash); build scripts; honest APK status.
+
+Work Log:
+- Deps pre-installed (Task 15-a continuation): @capacitor/{core,cli,android,app,status-bar,splash-screen}@7.
+- next.config.ts dual-target: MOCHI_TARGET=capacitor → output:'export' + distDir '.next-capacitor' + images.unoptimized; default unchanged (standalone).
+- capacitor.config.ts: appId com.mochigrain.app, appName 'Mochi Grain', webDir 'out', androidScheme https, adjustMarginsForEdgeToEdge 'auto', SplashScreen launchAutoHide 800ms #09090b, StatusBar DARK #09090b.
+- Static export validated: MOCHI_TARGET=capacitor bunx next build → out/ (index.html, _next/, manifest.json, sw.js, offline.html, icons). Confirms the frontend has NO server dependencies for the APK shell while hosted deployment stays standalone.
+- bunx cap add android → android/ project created; android:web build uses scripts/build-android-web.mjs wrapper; cap sync copied out/ into android/app/src/main/assets/public.
+- variables.gradle minSdkVersion=26 (notification channels); strings.xml app_name 'Mochi Grain'; MainActivity configChanges (orientation|screenSize|uiMode|...) added — orientation changes don't recreate the Activity.
+- Launcher icons generated into mipmap-{mdpi..xxxhdpi} + anydpi-v26 adaptive XML (ic_launcher, round, background, foreground).
+- NEW src/lib/capacitor-bridge.ts (all native plugin imports dynamic + guarded by window.Capacitor injected by the native bridge): ONE App back-button listener (module-flag guarded) → shared handleBackNative() policy (topmost overlay → detail → tab → Home); Home = App.minimizeApp() (background-not-exit, keeps monitoring); syncStatusBar(isDark) mirrors #09090b/#f5f5f7; SplashScreen.hide() safety net. page.tsx wires initNativeShell() + syncStatusBar(isDark) alongside existing effects; web behavior unchanged.
+- package.json scripts: android:web / android:sync / android:open / android:debug / android:release.
+- APK attempt: gradlew 8.11.1 + AGP resolve OK, but build fails at task creation: JRE-only sandbox ('/usr/lib/jvm/java-21-openjdk-amd64' lacks JAVA_COMPILER), no Android SDK, no sudo → NO APK PRODUCED (honest blocker, exact error captured). Full path documented in docs/ANDROID.md.
+- NEW docs/ANDROID.md: architecture decision (hosted PWA standalone unchanged; APK bundles static export of same frontend; offline cold start from local assets; updates via APK reinstall; no server in APK — deliberate, app has zero remote API deps), appId, build prereqs/scripts, sandbox blocker, native integration notes.
+- eslint ignores extended (android/, out/, .next-capacitor/, assets/, scripts/, cdp-net.mjs); tsc fix: SplashScreen HideOptions fadeOutDuration (was fadeDuration).
+- VERIFIED: lint clean; tsc 0 src errors; dev server 200; browser sanity — app renders (.grain-app present), SW active, 4 nav buttons, PWA unchanged.
+
+Stage Summary:
+- One codebase, two artifacts: hosted PWA (standalone server, SW offline layer) + Capacitor Android APK (locally bundled static export, cold start without network). appId com.mochigrain.app. Back/status-bar/splash/safe-area wired through guarded bridge; Back policy reused from back-nav.ts with minimize-on-Home. APK compilation blocked only by missing JDK/Android-SDK in sandbox — exact error + full build path documented.
+
+---
+Task ID: 15-c
+Agent: General-purpose Subagent (completed + verified by Main Agent after context deadline)
+Task: Reliable Android BLE monitoring via native foreground service (WebView no longer owns background connection) + production-grade system notifications; TS bridge keeps Web Bluetooth for PWA.
+
+Work Log:
+- ALL NATIVE CODE IN JAVA (no Kotlin plugin wiring, zero new gradle deps — sandbox cannot compile either way).
+- android/.../ble/NativeStore.java — SharedPreferences JSON state: association, monitoring config snapshot (grain + thresholds + pushAlerts + language), lastValidReading/lastPacketAt, pendingReadings FIFO (cap 2000, drop-oldest), alertState (signature/severity/cooldowns), connectionState + lastError, pendingTap.
+- ble/GrainBleManager.java — single GATT owner: bounded FFE0 scan (12s), user-selection dialog authorization in BlePlugin, connect(autoConnect=false) + 29002 descriptor subscribe (ONE notification listener), bounded retries 6× (5s→30s backoff, generation counter cancels on deliberate stop), adapter state receiver (BT off → cancel+ADAPTER_OFF; BT on → one fresh cycle when monitoring), packet parser exact web layout (min 12B, LE, sanity ranges, MALFORMED_PACKET never emitted, no fabrication), writeCommand wake/calibrate/sync/sleep, duplicate-connection guard.
+- ble/BleMonitoringService.java — foreground service type connectedDevice: silent status notification (real last-reading age only), START_STICKY, auto-reconnect to association after process restart, packet → NativeStore + NotificationHelper + bridge event; sleeping status shown; no scanning during sleep (firmware advertising limits documented in docs/BLE-ANDROID.md).
+- ble/BlePlugin.java — @CapacitorPlugin MochiBle: associate (runtime permission + scan + USER selection dialog, OS-pairing ≠ authorization), forget, connect, disconnect (deliberate stop), sendCommand, startMonitoring (persist config, enable), stopMonitoring, getStatus, drainPendingReadings (replay queue, then clear), consumePendingTap; events grainReading/grainConnection; registered in MainActivity (Capacitor 7 registerPlugin for local plugins).
+- MainActivity.java replaced: BridgeActivity + registerPlugin + mochi.tapTab intent extra (cold + onNewIntent).
+- notify/NotificationHelper.java — channels grain_critical (HIGH+sound+vib) / grain_warnings (DEFAULT) / grain_status (LOW silent); POST_NOTIFICATIONS requested on associate+startMonitoring (33+); band() mirror of TS banding; dedup signature = severity+metric, cooldowns 30m/15m, escalation bypass, recovery ≤1/h on silent channel; battery <15% max 1/12h; disconnect note once; pushAlerts=false suppresses risk/battery alerts; content = real value + unit + crossed threshold + grain + guidance, localized en/hi/mr (hinglish → default EN by design); tap → history (risk) / home (status).
+- notify/BootReceiver.java — BOOT_COMPLETED → startForegroundService when monitoringEnabled && associated (Android 15 connectedDevice boot-start caveat documented).
+- AndroidManifest.xml: BLUETOOTH_SCAN(neverForLocation)/BLUETOOTH_CONNECT (31+), legacy BLUETOOTH/BLUETOOTH_ADMIN/ACCESS_FINE_LOCATION (≤30), POST_NOTIFICATIONS, FOREGROUND_SERVICE(_CONNECTED_DEVICE), RECEIVE_BOOT_COMPLETED, WAKE_LOCK; service + receiver declared.
+- TS bridge: NEW src/lib/ble-bridge.ts — same exported API as bluetooth.ts (requestDevice/connect/reconnect/onReading/onDisconnected/disconnect/sendCommand); web → full delegation to ./bluetooth (zero behavior change, browser-verified "No device selected" honest flow); native → MochiBle dynamic imports, native monitoring config passthrough, reading mapping (deterministic id {mac}-{ts} → IndexedDB dedupe).
+- grain-store.ts: import swap to ble-bridge + setNativeMonitoringConfig before native connect + NEW restoreNativeSession() (web no-op; native: re-attach to live service, replay drained readings through handleReading → TS engine classification, consume pendingTap → tab). page.tsx calls it on mount.
+- NEW tests/native-rules.test.ts — 24 tests: banding boundaries (==safe, +0.1, ==warn, +0.1), metric independence, max-of-two escalation, escalation-bypass table. 24/24 PASS.
+- NEW docs/BLE-ANDROID.md: mechanism choice + reasons, firmware contract + advertising/sleep limits, notification design + cooldowns, honest verification matrix (TS vectors ✅ automated; Java mirror ⚠️ hand-synced; service lifecycle/screen-off/boot ⚠️ needs real phone + ESP32).
+- VERIFIED: bun run lint clean; tsc 0 src errors; dev 200; web BLE path browser-verified end-to-end (CONNECT PROBE → honest toast); 24/24 native-rules tests.
+- HONEST LIMITS: no JVM/Android SDK → Java never compiled; no physical phone/ESP32 → service lifecycle, screen-off notifications, boot restart, reconnect transitions NOT hardware-verified; OS pairing-vs-authorization behavior to confirm on device.
+
+Stage Summary:
+- Android now has a real native BLE path: associated GRAIN-01 probe, bounded-retry reconnect owned by a connectedDevice foreground service, native packet persistence with deterministic-id replay into the existing TS engine (single classification source, no dupes, no fabricated data), and channelized localized notifications with dedup/cooldown/escalation/recovery honoring pushAlerts. The PWA keeps Web Bluetooth untouched. Everything ships ready to compile; device-hardware claims are explicitly withheld.

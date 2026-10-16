@@ -69,6 +69,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hero.moisture_content': 'moisture content',
     'hero.live': 'LIVE',
     'hero.last_reading': 'Last reading',
+    'connectivity.offline': 'Offline — your data stays on this device',
+    'connectivity.offline_desc': 'Readings, history and settings are safe. Discover needs internet.',
+    'connectivity.weak': 'Weak connection',
+    'toast.back_online': 'Back online',
+    'discover.offline_banner': "You're offline — Discover needs internet. Open videos when you're back online.",
+    'update.available': 'New version ready',
+    'update.reload': 'Reload',
 
     // ── Metric Pills ──
     'metric.temp': 'Temp',
@@ -443,6 +450,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hero.moisture_content': 'नमी सामग्री',
     'hero.live': 'लाइव',
     'hero.last_reading': 'अंतिम रीडिंग',
+    'connectivity.offline': 'ऑफ़लाइन — आपका डेटा इसी डिवाइस पर सुरक्षित है',
+    'connectivity.offline_desc': 'रीडिंग, इतिहास और सेटिंग्स सुरक्षित हैं। Discover को इंटरनेट चाहिए।',
+    'connectivity.weak': 'कमज़ोर कनेक्शन',
+    'toast.back_online': 'फिर से ऑनलाइन',
+    'discover.offline_banner': 'आप ऑफ़लाइन हैं — Discover को इंटरनेट चाहिए। वापस ऑनलाइन आने पर वीडियो खोलें।',
+    'update.available': 'नया संस्करण तैयार है',
+    'update.reload': 'रीलोड करें',
 
     // ── Metric Pills ──
     'metric.temp': 'तापमान',
@@ -817,6 +831,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hero.moisture_content': 'ओलावा सामग्री',
     'hero.live': 'लाइव्ह',
     'hero.last_reading': 'शेवटचे वाचन',
+    'connectivity.offline': 'ऑफलाइन — तुमचा डेटा याच डिव्हाइसवर सुरक्षित आहे',
+    'connectivity.offline_desc': 'वाचने, इतिहास आणि सेटिंग्ज सुरक्षित आहेत. Discover ला इंटरनेट लागतो.',
+    'connectivity.weak': 'कमी सिग्नलचे कनेक्शन',
+    'toast.back_online': 'पुन्हा ऑनलाइन',
+    'discover.offline_banner': 'तुम्ही ऑफलाइन आहात — Discover ला इंटरनेट लागतो. परत ऑनलाइन आल्यावर व्हिडिओ उघडा.',
+    'update.available': 'नवीन आवृत्ती तयार आहे',
+    'update.reload': 'रीलोड करा',
 
     // ── Metric Pills ──
     'metric.temp': 'तापमान',
@@ -1191,6 +1212,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hero.moisture_content': 'moisture content',
     'hero.live': 'LIVE',
     'hero.last_reading': 'Last reading',
+    'connectivity.offline': 'Offline — aapka data isi device pe safe hai',
+    'connectivity.offline_desc': 'Readings, history aur settings safe hain. Discover ko internet chahiye.',
+    'connectivity.weak': 'Weak connection',
+    'toast.back_online': 'Wapas online',
+    'discover.offline_banner': "Aap offline ho — Discover ko internet chahiye. Wapas online aake videos kholo.",
+    'update.available': 'Naya version ready hai',
+    'update.reload': 'Reload karo',
 
     // ── Metric Pills ──
     'metric.temp': 'Temp',

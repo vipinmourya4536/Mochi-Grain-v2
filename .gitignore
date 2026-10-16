@@ -15,7 +15,10 @@ node_modules
 
 # next.js
 /.next/
+/.next-capacitor/
 /out/
+# isolated Capacitor web build sandbox (scripts/build-android-web.mjs)
+/.capacitor-build/
 
 # production
 /build

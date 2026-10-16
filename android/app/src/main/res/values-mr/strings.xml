@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- मराठी — native BLE monitoring notification strings. -->
+    <string name="notify_channel_critical_name">गंभीर धान्य सूचना</string>
+    <string name="notify_channel_critical_desc">साठवलेल्या धान्यासाठी तात्काळ ओलावा किंवा तापमान धोका</string>
+    <string name="notify_channel_warnings_name">धान्य चेतावण्या</string>
+    <string name="notify_channel_warnings_desc">ग्रेन प्रोब कडून सुरुवातीच्या साठवण-जोखीम चेतावण्या</string>
+    <string name="notify_channel_status_name">मॉनिटरिंग स्थिती</string>
+    <string name="notify_channel_status_desc">ग्रेन प्रोब ची शांत कनेक्शन स्थिती</string>
+
+    <string name="notify_title_warning_moisture">ओलावा चेतावणी</string>
+    <string name="notify_title_warning_temperature">तापमान चेतावणी</string>
+    <string name="notify_title_critical_moisture">ओलावा गंभीर</string>
+    <string name="notify_title_critical_temperature">तापमान गंभीर</string>
+    <string name="notify_title_battery">प्रोब बॅटरी कमी</string>
+    <string name="notify_title_disconnected">प्रोब खंडित झाले</string>
+    <string name="notify_recovered">सुरक्षित पातळीवर परत</string>
+
+    <string name="notify_status_monitoring">%1$s चे निरीक्षण · शेवटचे वाचन %2$s</string>
+    <string name="notify_status_sleeping">%1$s चे निरीक्षण · प्रोब झोपलेले · शेवटचे वाचन %2$s</string>
+    <string name="notify_status_last_reading">शेवटचे वाचन %1$s</string>
+    <string name="notify_status_waiting">%1$s चे निरीक्षण · पहिल्या वाचनाची प्रतीक्षा</string>
+
+    <string name="notify_age_now">आत्ताच</string>
+    <string name="notify_age_min">%1$d मिनिटे आधी</string>
+    <string name="notify_age_hr">%1$d तास आधी</string>
+    <string name="notify_age_day">%1$d दिवस आधी</string>
+    <string name="notify_age_never">अजून वाचन नाही</string>
+
+    <string name="notify_text_alert">%1$s: %2$s%3$s (मर्यादा %4$s%5$s)</string>
+    <string name="notify_text_battery">प्रोब बॅटरी %1$d%% — 15%% सूचना रेषेखाली.</string>
+    <string name="notify_text_disconnected">%1$s कडून डेटा नाही. शेवटचा पॅकेट %2$s.</string>
+    <string name="notify_recovered_text">%1$s सुरक्षित मर्यादेत परत आले आहे.</string>
+
+    <string name="notify_guidance_moisture">बिघाड थांबवण्यासाठी धान्य आता पसरवा किंवा वाळवा.</string>
+    <string name="notify_guidance_temperature">बिन सावलीत ठेवा आणि हवेचा प्रवाह वाढवा.</string>
+    <string name="notify_guidance_battery">प्रोब ची बॅटरी लवकर चार्ज करा किंवा बदला.</string>
+    <string name="notify_guidance_disconnect">निरीक्षण सुरू ठेवण्यासाठी प्रोब रेंजमध्ये आणा किंवा जगवा.</string>
+</resources>

@@ -7,6 +7,11 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
+    "android:web": "node scripts/build-android-web.mjs",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "android:debug": "bun run android:web && bun run android:sync && cd android && ./gradlew assembleDebug",
+    "android:release": "bun run android:web && bun run android:sync && cd android && ./gradlew assembleRelease",
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -89,6 +94,7 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@tailwindcss/postcss": "^4",
     "@types/react": "^19",
     "@types/react-dom": "^19",

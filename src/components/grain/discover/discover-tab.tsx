@@ -6,7 +6,8 @@ import { getDiscoverContent } from '@/lib/discover-content';
 import { stateToRiskTheme } from '@/lib/grain-types';
 import { getBookmarkedEntries, toggleVideoBookmark, type BookmarkRecord } from '@/lib/offline-storage';
 import { haptic } from '@/lib/haptics';
-import { YoutubeLogo, ArrowSquareOut, PlayCircle, BookmarkSimple } from '@phosphor-icons/react/dist/ssr';
+import { useNetworkStatus } from '@/lib/pwa';
+import { YoutubeLogo, ArrowSquareOut, PlayCircle, BookmarkSimple, CloudSlash } from '@phosphor-icons/react/dist/ssr';
 import { t, tp, tGrain, type AppLanguage } from '@/lib/i18n';
 import type { DiscoverVideo } from '@/lib/grain-types';
 
@@ -116,6 +117,7 @@ function DiscoverCard({
 
 export function DiscoverTab() {
   const { decision, settings, deviceState, showToast } = useGrainStore();
+  const { online } = useNetworkStatus();
   const lang = settings.language as AppLanguage;
 
   const grainType = settings.grainType;
@@ -214,6 +216,12 @@ export function DiscoverTab() {
       )}
 
       {/* Filter chips: All | Saved */}
+      {!online && (
+        <div className="grain-discover-offline" role="status">
+          <CloudSlash size={15} weight="bold" aria-hidden="true" />
+          <span>{t('discover.offline_banner', lang)}</span>
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-4">
         <div className="grain-seg" role="tablist" aria-label={t('discover.filter_all', lang)}>
           <button

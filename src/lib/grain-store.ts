@@ -35,7 +35,9 @@ import {
   onDisconnected as bleOnDisconnected,
   disconnect as bleDisconnect,
   sendCommand,
-} from './bluetooth';
+  setNativeMonitoringConfig,
+  initNativeSession,
+} from './ble-bridge';
 import { t, tp, type AppLanguage } from './i18n';
 import { haptic } from './haptics';
 
@@ -94,6 +96,7 @@ interface GrainStore {
   connectProbe: () => Promise<void>;
   disconnectProbe: () => void;
   sendProbeCommand: (cmd: 'wake' | 'calibrate' | 'sync' | 'sleep') => Promise<void>;
+  restoreNativeSession: () => Promise<void>;
   clearHistory: () => Promise<void>;
   loadHistory: () => Promise<void>;
   loadSettings: () => Promise<void>;
@@ -253,6 +256,20 @@ export const useGrainStore = create<GrainStore>((set, get) => ({
 
     set({ deviceInfo: info });
 
+    // Native: push the monitoring config snapshot BEFORE connect so the
+    // foreground service bands notifications with the user's real profile
+    // (web: stored in a module var and ignored — bluetooth.ts is untouched).
+    const s = get().settings;
+    setNativeMonitoringConfig({
+      grainType: s.grainType,
+      moistureSafeMax: s.thresholds.safe,
+      moistureWarnMax: s.thresholds.warn,
+      tempSafeMax: s.thresholds.tempSafe,
+      tempWarnMax: s.thresholds.tempWarn,
+      pushAlerts: s.pushAlerts,
+      language: s.language,
+    });
+
     const connected = await bleConnect();
     if (!connected) {
       set({ deviceState: 'disconnected' });
@@ -334,6 +351,36 @@ export const useGrainStore = create<GrainStore>((set, get) => ({
       }
     }, 5000);
     get().showToast(ok ? t('toast.syncing_history', lang) : t('toast.sync_failed', lang));
+  },
+
+  /* ═══ Native session restore (no-op on web) ═══
+   * After a WebView reload / app restart: if the native foreground
+   * service still holds a live probe connection, re-attach the UI to
+   * it, replay readings queued natively while the WebView was down
+   * (deterministic ids → IndexedDB put() dedupes), and honor a
+   * notification tap target. Web: initNativeSession returns null. */
+  restoreNativeSession: async () => {
+    const stash: Reading[] = [];
+    const res = await initNativeSession(
+      (reading) => {
+        // handleReading drops packets while disconnected/connecting —
+        // so during the async restore, readings are stashed and
+        // replayed after the state is set (ordering-safe).
+        if (get().deviceState === 'connected') get().handleReading(reading);
+        else stash.push(reading);
+      },
+      () => {
+        if (get().deviceState === 'connected') get().handleUnexpectedDisconnect();
+        // during restore: ignore — native may still be settling
+      },
+    );
+    if (!res?.deviceInfo) return;
+    set({ deviceState: 'connected', hasDevice: true, deviceInfo: res.deviceInfo });
+    for (const reading of stash) get().handleReading(reading);
+    const tap = res.pendingTap;
+    if (tap === 'home' || tap === 'discover' || tap === 'history' || tap === 'settings') {
+      set({ activeTab: tap });
+    }
   },
 
   /* ═══ Internal ═══ */

@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- हिंदी — native BLE monitoring notification strings.
+         'hinglish' जानबूझकर रोमनized EN (values/) पर फॉलबैक करता है। -->
+    <string name="notify_channel_critical_name">गंभीर अनाज अलर्ट</string>
+    <string name="notify_channel_critical_desc">संग्रहित अनाज के लिए तत्काल नमी या तापमान खतरा</string>
+    <string name="notify_channel_warnings_name">अनाज चेतावनियाँ</string>
+    <string name="notify_channel_warnings_desc">ग्रेन प्रोब से शुरुआती भंडारण-जोखिम चेतावनियाँ</string>
+    <string name="notify_channel_status_name">मॉनिटरिंग स्थिति</string>
+    <string name="notify_channel_status_desc">ग्रेन प्रोब की शांत कनेक्शन स्थिति</string>
+
+    <string name="notify_title_warning_moisture">नमी चेतावनी</string>
+    <string name="notify_title_warning_temperature">तापमान चेतावनी</string>
+    <string name="notify_title_critical_moisture">नमी गंभीर</string>
+    <string name="notify_title_critical_temperature">तापमान गंभीर</string>
+    <string name="notify_title_battery">प्रोब बैटरी कम</string>
+    <string name="notify_title_disconnected">प्रोब डिस्कनेक्ट हो गया</string>
+    <string name="notify_recovered">सुरक्षित स्तर पर वापस</string>
+
+    <string name="notify_status_monitoring">%1$s की निगरानी · अंतिम रीडिंग %2$s</string>
+    <string name="notify_status_sleeping">%1$s की निगरानी · प्रोब सो रहा है · अंतिम रीडिंग %2$s</string>
+    <string name="notify_status_last_reading">अंतिम रीडिंग %1$s</string>
+    <string name="notify_status_waiting">%1$s की निगरानी · पहली रीडिंग की प्रतीक्षा</string>
+
+    <string name="notify_age_now">अभी</string>
+    <string name="notify_age_min">%1$d मिनट पहले</string>
+    <string name="notify_age_hr">%1$d घंटे पहले</string>
+    <string name="notify_age_day">%1$d दिन पहले</string>
+    <string name="notify_age_never">अभी तक कोई रीडिंग नहीं</string>
+
+    <string name="notify_text_alert">%1$s: %2$s%3$s (सीमा %4$s%5$s)</string>
+    <string name="notify_text_battery">प्रोब बैटरी %1$d%% — 15%% अलर्ट रेखा से नीचे।</string>
+    <string name="notify_text_disconnected">%1$s से कोई डेटा नहीं। अंतिम पैकेट %2$s।</string>
+    <string name="notify_recovered_text">%1$s सुरक्षित सीमा के भीतर वापस आ गया है।</string>
+
+    <string name="notify_guidance_moisture">खराबी रोकने के लिए अनाज को अभी फैलाएँ या सुखाएँ।</string>
+    <string name="notify_guidance_temperature">बिन को छाया में रखें और हवा का प्रवाह बढ़ाएँ।</string>
+    <string name="notify_guidance_battery">प्रोब की बैटरी जल्द चार्ज करें या बदलें।</string>
+    <string name="notify_guidance_disconnect">प्रोब को रेंज में लाएँ या जगाएँ ताकि निगरानी जारी रहे।</string>
+</resources>
