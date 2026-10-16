@@ -9,14 +9,14 @@
    - The frontend is fully client-side: every reading, setting, and
      Mochi decision lives in IndexedDB (grain-monitor-db). Core tabs
      (Home / History / Settings) never call remote APIs, so the app
-     shell + hashed bundles are enough for a full offline cold start.
+     shell + bundles are enough for a full offline cold start.
    - Discover is remote content (YouTube thumbnails + external links)
      and is treated separately: thumbnails cached opportunistically in
      a small capped cache; playback/links always require the network.
 
    Caches (all versioned under one prefix, cleaned on activation):
      shell  — precached app assets (HTML shell, manifest, icons)
-     assets — immutable content-hashed /_next/static files + fonts
+     assets — /_next/static bundles + fonts (network-first, cache fallback)
      pages  — navigation HTML responses (bounded)
      media  — remote Discover thumbnails (bounded, opportunistic)
 
@@ -35,7 +35,7 @@
 /* Bump SW_VERSION for every deploy that changes app code/assets.
  * Old caches are deleted on activation; the HTML shell is revalidated
  * network-first so new hashed bundles are picked up on the next launch. */
-const SW_VERSION = 'v1.0.1';
+const SW_VERSION = 'v1.0.2';
 const CACHE_PREFIX = 'mochi-sw';
 
 const SHELL_CACHE = `${CACHE_PREFIX}-${SW_VERSION}-shell`;
@@ -63,18 +63,13 @@ const MAX_MEDIA_ENTRIES = 48;
 
 /* ── Helpers ── */
 
-/** Content-hashed URL → safe to serve cache-first (immutable).
- *  Matches /_next/static build artifacts and self-hosted fonts:
- *   /_next/static/chunks/432-a1b2c3d4.js, /app/page-abc123.js
- *   /_next/static/css/xyz.css?checksum
- *   /_next/static/media/inter-latin-400-normal.woff2 (hashed name)
- *  Dev-mode chunks (chunks/main-app.js, chunks/webpack.js) have NO
- *  content hash → network-first so rebuilds are never masked. */
-function isHashedAsset(url) {
-  return (
-    url.pathname.startsWith('/_next/static/') &&
-    /-[0-9A-Za-z_-]{6,}\.(?:js|css|woff2?|png|jpg|jpeg|svg|ico|webp)$/.test(url.pathname)
-  );
+/** /_next/static URL → offline-cacheable build artifact.
+ *  Covers BOTH production fingerprints (content-hashed chunks, hashed
+ *  css/fonts) and dev-server artifacts — the STRATEGY differs (see the
+ *  asset branch below), but both are safe to keep in ASSET_CACHE as a
+ *  fallback because only successful same-origin 200s are stored. */
+function isStaticBuildAsset(url) {
+  return url.pathname.startsWith('/_next/static/');
 }
 
 function isYouTubeThumb(url) {
@@ -169,9 +164,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Immutable hashed build output → cache-first (offline cold start)
-  if (isHashedAsset(url)) {
-    event.respondWith(cacheFirst(request, ASSET_CACHE));
+  // Build artifacts (bundles, css, fonts) → NETWORK-FIRST with cache
+  // fallback. Rationale (verified 2026-10-16): a cache-first asset layer
+  // masked code changes — the dev server reuses STABLE URLs for rebuilt
+  // chunks, so reloads kept executing stale bundles. Production is NOT
+  // slowed by the network-first probe: immutable hashed files carry
+  // long-lived HTTP cache headers, so the fetch is satisfied by the
+  // browser's own HTTP cache at ~zero cost. Offline still cold-starts
+  // from ASSET_CACHE. The short timeout mirrors the navigation policy
+  // so weak links fall back to cache quickly instead of hanging.
+  if (isStaticBuildAsset(url)) {
+    event.respondWith(networkFirstAsset(request));
     return;
   }
 
@@ -218,21 +221,24 @@ async function handleNavigation(event) {
   );
 }
 
-async function cacheFirst(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-  if (cached) return cached;
+/* Build artifacts (bundles, css, fonts): network-first with a bounded
+ * probe, falling back to the cached copy when the network is slow or
+ * dead. A fresh 200 is stored so the next offline cold start uses the
+ * newest bundle the device has ever seen. */
+async function networkFirstAsset(request) {
   try {
-    const fresh = await fetch(request);
+    const fresh = await fetchWithTimeout(request, 3000);
     if (fresh && fresh.ok && fresh.type !== 'opaque') {
+      const cache = await caches.open(ASSET_CACHE);
       cache.put(request, fresh.clone());
     }
     return fresh;
-  } catch (err) {
-    // Immutable asset not cached and network dead → surface an honest
-    // error rather than serving unrelated content.
-    return new Response('', { status: 504, statusText: 'Offline' });
+  } catch {
+    // Network dead/slow → cached bundle (offline cold start path).
   }
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  return new Response('', { status: 504, statusText: 'Offline' });
 }
 
 async function staleWhileRevalidate(request, cacheName, { trim }) {

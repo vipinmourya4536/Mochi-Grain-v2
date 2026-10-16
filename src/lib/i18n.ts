@@ -81,6 +81,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'metric.temp': 'Temp',
     'metric.signal': 'Signal',
     'metric.battery': 'Battery',
+    'metric.storage': 'Storage',
+    'metric.link_quality': 'Link quality',
 
     // ── Insight ──
     'insight.probe_sleeping': 'Probe Sleeping',
@@ -467,6 +469,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'metric.temp': 'तापमान',
     'metric.signal': 'सिग्नल',
     'metric.battery': 'बैटरी',
+    'metric.storage': 'स्टोरेज',
+    'metric.link_quality': 'सिग्नल गुणवत्ता',
 
     // ── Insight ──
     'insight.probe_sleeping': 'प्रोब सो रहा है',
@@ -853,6 +857,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'metric.temp': 'तापमान',
     'metric.signal': 'सिग्नल',
     'metric.battery': 'बॅटरी',
+    'metric.storage': 'साठा',
+    'metric.link_quality': 'सिग्नल गुणवत्ता',
 
     // ── Insight ──
     'insight.probe_sleeping': 'प्रोब झोपेत आहे',
@@ -1239,6 +1245,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'metric.temp': 'Temp',
     'metric.signal': 'Signal',
     'metric.battery': 'Battery',
+    'metric.storage': 'Storage',
+    'metric.link_quality': 'Link quality',
 
     // ── Insight ──
     'insight.probe_sleeping': 'Probe So Raha Hai',

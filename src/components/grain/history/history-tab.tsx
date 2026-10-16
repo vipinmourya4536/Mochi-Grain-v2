@@ -4,14 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGrainStore } from '@/lib/grain-store';
 import type { HistoryEntry } from '@/lib/grain-types';
-import { X, TrendUp, TrendDown, Minus, ArrowClockwise, Trash, Gauge, ShareFat, Check, Question, Stack, Waves, ChartLine, DownloadSimple, Drop, Thermometer, CaretDown } from '@phosphor-icons/react/dist/ssr';
+import { X, TrendUp, TrendDown, Minus, ArrowClockwise, ShareFat, Check, Question, Stack, Waves, ChartLine, DownloadSimple, Drop, Thermometer } from '@phosphor-icons/react/dist/ssr';
 import { t, tGrain, tTrend, tp, type AppLanguage } from '@/lib/i18n';
 import { getRiskColor, getRiskBg } from '@/lib/accent-hex';
 import { computeStorageScore, scoreBandColor, type ScoreBand } from '@/lib/storage-score';
 import { haptic } from '@/lib/haptics';
 import { buildReadingsCsv, deliverCsv } from '@/lib/csv-export';
 import { registerBackConsumer } from '@/lib/back-nav';
-import { DeleteButton, ConfirmDialog } from '@/components/grain/delete-button';
 import { HistoryTrends } from './trends-chart';
 import { DetailSparkline } from './detail-sparkline';
 import { format } from 'date-fns';
@@ -22,17 +21,6 @@ function getTrendIcon(trend: string) {
     case 'falling': case 'drop': case 'falling_rapidly': return <TrendDown size={14} weight="bold" />;
     default: return <Minus size={14} weight="bold" />;
   }
-}
-
-/** Compact human time span: "45m", "2h 30m", "3d 4h" */
-function formatSpan(ms: number): string {
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 1) return '—';
-  if (minutes < 90) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h ${minutes % 60}m`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ${hours % 24}h`;
 }
 
 /* ═══ Delta vs previous reading ═══
@@ -68,295 +56,6 @@ function DeltaChip({ delta, ariaLabel }: { delta: Delta; ariaLabel: string }) {
           : <Minus size={10} weight="bold" />}
       {(delta.value > 0 ? '+' : '') + delta.value.toFixed(1)}%
     </span>
-  );
-}
-
-interface Stats {
-  avg: number;
-  min: number;
-  max: number;
-  avgTemp: number;
-  count: number;
-  spanMs: number;
-}
-
-function computeStats(entries: HistoryEntry[]): Stats | null {
-  if (entries.length === 0) return null;
-  let sum = 0;
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
-  let tempSum = 0;
-  let newest = 0;
-  let oldest = Number.POSITIVE_INFINITY;
-
-  for (const e of entries) {
-    const m = e.reading.moisture;
-    sum += m;
-    if (m < min) min = m;
-    if (m > max) max = m;
-    tempSum += e.reading.temperature;
-    const ts = e.reading.timestamp;
-    if (ts > newest) newest = ts;
-    if (ts < oldest) oldest = ts;
-  }
-
-  return {
-    avg: sum / entries.length,
-    min,
-    max,
-    avgTemp: tempSum / entries.length,
-    count: entries.length,
-    spanMs: newest - oldest,
-  };
-}
-
-/**
- * Aggregate summary for all stored readings, with a threshold-zone bar
- * showing where the session's moisture sits against the active grain profile.
- */
-function HistoryStats({ entries }: { entries: HistoryEntry[] }) {
-  const { settings } = useGrainStore();
-  const lang = settings.language as AppLanguage;
-  const { safe, warn, critical } = settings.thresholds;
-
-  const stats = useMemo(() => computeStats(entries), [entries]);
-  if (!stats) return null;
-
-  // Zone bar domain: 0 → critical + 4 (stable visual scale)
-  const barMax = critical + 4;
-  const pct = (v: number) => `${Math.min(100, Math.max(0, (v / barMax) * 100))}%`;
-  const safeW = pct(safe);
-  const warnW = pct(critical - safe);
-  const critW = pct(barMax - critical);
-  const avgPos = pct(stats.avg);
-  const minPos = pct(stats.min);
-  const maxPos = pct(stats.max);
-
-  return (
-    <div className="grain-stats-card mb-4" role="group" aria-label={t('history.stats_title', lang)}>
-      {/* Header row: gauge icon + title */}
-      <div className="flex items-center gap-2 mb-3">
-        <Gauge size={13} weight="bold" style={{ color: 'var(--gm-accent)' }} />
-        <span className="text-[9px] font-bold tracking-[0.18em] uppercase" style={{ color: 'var(--gm-text-tertiary)' }}>
-          {t('history.stats_title', lang)}
-        </span>
-        <span className="ml-auto text-[9px] font-semibold tracking-wide" style={{ color: 'var(--gm-text-tertiary)' }}>
-          {formatSpan(stats.spanMs)}
-        </span>
-      </div>
-
-      {/* Big average + mini stats grid */}
-      <div className="flex items-stretch gap-4">
-        <div className="shrink-0">
-          <div className="text-[9px] font-bold tracking-[0.15em] uppercase mb-1" style={{ color: 'var(--gm-text-secondary)' }}>
-            {t('history.stat_avg', lang)}
-          </div>
-          <div className="flex items-baseline gap-1 grain-tabular">
-            <span className="text-4xl font-bold tracking-tight" style={{ color: 'var(--gm-text-primary)' }}>
-              {stats.avg.toFixed(1)}
-            </span>
-            <span className="text-sm font-semibold" style={{ color: 'var(--gm-text-tertiary)' }}>%</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 flex-1 justify-items-end content-center grain-tabular">
-          <StatCell label={t('history.stat_min', lang)} value={`${stats.min.toFixed(1)}%`} />
-          <StatCell label={t('history.stat_max', lang)} value={`${stats.max.toFixed(1)}%`} />
-          <StatCell label={t('history.stat_temp', lang)} value={`${stats.avgTemp.toFixed(1)}°C`} />
-          <StatCell label={t('history.readings', lang)} value={String(stats.count)} />
-        </div>
-      </div>
-
-      {/* Threshold zone bar with min/avg/max markers */}
-      <div className="mt-4">
-        <div className="flex justify-between mb-1.5">
-          <span className="text-[8px] font-bold tracking-[0.15em] uppercase" style={{ color: 'var(--gm-text-tertiary)' }}>
-            {t('history.stat_range', lang)}
-          </span>
-          <span className="text-[8px] font-semibold grain-tabular" style={{ color: 'var(--gm-text-tertiary)' }}>
-            &lt;{safe}% · &lt;{critical}%
-          </span>
-        </div>
-        <div className="grain-stats-bar" aria-hidden="true">
-          <div className="grain-stats-zone" style={{ left: 0, width: safeW, background: 'rgba(34, 197, 94, 0.5)' }} />
-          <div className="grain-stats-zone" style={{ left: safeW, width: warnW, background: 'rgba(245, 158, 11, 0.45)' }} />
-          <div className="grain-stats-zone" style={{ left: pct(critical), right: 0, width: critW, background: 'rgba(239, 68, 68, 0.5)' }} />
-          <span className="grain-stats-marker" style={{ left: minPos }} />
-          <span className="grain-stats-marker" style={{ left: maxPos }} />
-          <span className="grain-stats-avg" style={{ left: avgPos }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="text-right">
-      <div className="text-[8px] font-bold tracking-[0.12em] uppercase" style={{ color: 'var(--gm-text-tertiary)' }}>{label}</div>
-      <div className="text-[13px] font-bold leading-tight" style={{ color: 'var(--gm-text-secondary)' }}>{value}</div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
-   SUMMARY CARD — the one glanceable layer at the top
-   • Latest RECORDED reading + its timestamp (saved data)
-   • Freshness badge: LIVE (real-time packet < 2 min old) vs
-     SAVED (stored reading — explicitly NOT presented as live)
-   • Simple moisture trend vs the previous reading
-   • One-line Mochi status with a severity dot
-   ═══════════════════════════════════════════════════════ */
-
-const FRESH_WINDOW_MS = 2 * 60e3;
-
-function HistorySummary({ entries }: { entries: HistoryEntry[] }) {
-  const { settings, deviceState } = useGrainStore();
-  const lang = settings.language as AppLanguage;
-  const accent = settings.accentColor;
-  const latest = entries[0]; // newest-first store order
-  const prev = entries[1];
-  const delta = latest ? computeDelta(latest, prev) : null;
-  const dotHex = latest ? getRiskColor(latest.decision.state, accent) : 'var(--gm-text-tertiary)';
-
-  // Freshness: LIVE requires a real connection AND a recent packet.
-  // Everything else is an honest SAVED label — never cached-as-live.
-  const age = latest ? Date.now() - latest.reading.timestamp : Infinity;
-  const isLive = deviceState !== 'disconnected' && deviceState !== 'connecting' && age < FRESH_WINDOW_MS;
-  const freshnessLabel = isLive ? t('history.freshness_live', lang) : t('history.freshness_saved', lang);
-
-  const messageText = latest?.decision.messageKey
-    ? t(latest.decision.messageKey, lang)
-    : latest?.decision.message ?? '';
-
-  return (
-    <div className="grain-stats-card mb-4" role="group" aria-label={t('history.summary_title', lang)}>
-      {/* Row 1: latest value + freshness */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[9px] font-bold tracking-[0.15em] uppercase mb-1" style={{ color: 'var(--gm-text-tertiary)' }}>
-            {t('history.latest_reading', lang)}
-          </div>
-          {latest ? (
-            <div className="flex items-baseline gap-1.5 grain-tabular">
-              <span className="text-4xl font-bold tracking-tight" style={{ color: dotHex }}>
-                {latest.reading.moisture.toFixed(1)}
-              </span>
-              <span className="text-sm font-semibold" style={{ color: 'var(--gm-text-tertiary)' }}>%</span>
-              <span className="text-xs font-semibold ml-1" style={{ color: 'var(--gm-text-secondary)' }}>
-                {Math.round(latest.reading.temperature)}°C
-              </span>
-              {delta && <DeltaChip delta={delta} ariaLabel={`${t('history.delta_prev', lang)} ${(delta.value > 0 ? '+' : '') + delta.value.toFixed(1)}%`} />}
-            </div>
-          ) : (
-            <div className="text-2xl font-bold" style={{ color: 'var(--gm-text-tertiary)' }}>—</div>
-          )}
-          {latest && (
-            <p className="text-[10px] grain-tabular mt-1 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
-              {format(latest.reading.timestamp, 'MMM d · h:mm a')}
-            </p>
-          )}
-        </div>
-        <span
-          className={`shrink-0 grain-freshness-chip ${isLive ? 'live' : ''}`}
-          role="status"
-          aria-label={freshnessLabel}
-        >
-          <span className="grain-freshness-dot" aria-hidden="true" />
-          {freshnessLabel}
-        </span>
-      </div>
-
-      {/* Row 2: Mochi status (severity-colored, single line) */}
-      {latest && (
-        <div
-          className="flex items-start gap-2.5 mt-3 pt-3"
-          style={{ borderTop: '1px solid var(--gm-separator)' }}
-        >
-          <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: dotHex, boxShadow: `0 0 6px ${dotHex}` }} aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="text-[11.5px] font-semibold leading-snug mb-0" style={{ color: 'var(--gm-text-primary)' }}>
-              <span style={{ color: dotHex }}>{t('brand.mochi', lang)}</span>{' '}
-              {messageText}
-            </p>
-            <p className="text-[10px] mt-0.5 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
-              {tTrend(latest.decision.trend, lang)} · {latest.decision.confidence === 'high' ? t('history.conf_high', lang) : latest.decision.confidence === 'medium' ? t('history.conf_medium', lang) : t('history.conf_low', lang)}
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════
-   ANALYTICS — secondary area (collapsed by default)
-   Long-range statistics, storage score and destructive data
-   controls live here so the top of the tab stays scannable.
-   ═══════════════════════════════════════════════════════ */
-
-function AnalyticsSection({ entries }: { entries: HistoryEntry[] }) {
-  const { settings, clearHistory, showToast } = useGrainStore();
-  const lang = settings.language as AppLanguage;
-  const [open, setOpen] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
-
-  return (
-    <div className="mb-4">
-      <button
-        type="button"
-        className="grain-analytics-toggle"
-        onClick={() => { haptic(settings.hapticsEnabled, 6); setOpen((v) => !v); }}
-        aria-expanded={open}
-      >
-        <div className="flex items-center gap-2.5">
-          <Gauge size={15} weight="bold" style={{ color: 'var(--gm-accent)' }} />
-          <span className="text-xs font-semibold" style={{ color: 'var(--gm-text-primary)' }}>
-            {t('history.analytics', lang)}
-          </span>
-        </div>
-        <CaretDown
-          size={15}
-          weight="bold"
-          className={`grain-chevron ${open ? 'rotated' : ''}`}
-          style={{ color: 'var(--gm-text-tertiary)' }}
-        />
-      </button>
-      {open && (
-        <div className="grain-fade-in">
-          <HistoryStats entries={entries} />
-          {entries.length >= 3 && <StorageScoreCard entries={entries} />}
-          {/* Clear history — animated delete control. Clicking NEVER deletes:
-              it opens the shared confirmation dialog first; only an explicit
-              confirm removes records. Free space sits to the LEFT of the
-              control so the hover expansion shifts nothing. */}
-          <div className="w-full flex justify-between items-center gap-3 py-2 pl-5 pr-3 grain-card">
-            <div className="flex items-center gap-3 min-w-0">
-              <Trash size={16} weight="bold" style={{ color: '#EF4444', flexShrink: 0 }} />
-              <span className="text-xs font-semibold" style={{ color: '#EF4444' }}>{t('settings.clear_history', lang)}</span>
-            </div>
-            <DeleteButton
-              ariaLabel={t('settings.clear_history', lang)}
-              revealText={t('settings.delete', lang)}
-              onActivate={() => setConfirmClear(true)}
-              hapticsEnabled={settings.hapticsEnabled}
-            />
-          </div>
-          <ConfirmDialog
-            open={confirmClear}
-            onOpenChange={setConfirmClear}
-            title={t('settings.clear_confirm_title', lang)}
-            description={tp('settings.clear_confirm_desc', lang, { n: entries.length })}
-            confirmLabel={t('settings.clear_confirm_action', lang)}
-            cancelLabel={t('settings.cancel', lang)}
-            hapticsEnabled={settings.hapticsEnabled}
-            onConfirm={async () => {
-              await clearHistory();
-              showToast(t('toast.history_cleared', lang));
-            }}
-          />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -648,8 +347,8 @@ function ReadingList() {
 
   return (
     <div className="flex flex-col gap-2 grain-fade-in">
-      {/* 1 — glanceable summary: latest + freshness + trend + Mochi */}
-      <HistorySummary entries={historyEntries} />
+      {/* 1 — storage score: the glanceable health index leads the tab */}
+      <StorageScoreCard entries={historyEntries} />
 
       {/* 2 — ONE primary chart (moisture by default, temp toggle) */}
       {historyEntries.length >= 2 && <HistoryTrends entries={historyEntries} />}
@@ -681,8 +380,6 @@ function ReadingList() {
         );
       })}
 
-      {/* 4 — secondary area: stats, storage score, destructive controls */}
-      <AnalyticsSection entries={historyEntries} />
     </div>
   );
 }

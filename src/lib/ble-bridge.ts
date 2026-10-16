@@ -44,6 +44,11 @@ import type { Reading, DeviceInfo, GrainType } from './grain-types';
 import { GRAIN_OPTIONS } from './grain-types';
 import * as webBle from './bluetooth';
 import { isNativeApp } from './capacitor-bridge';
+import {
+  recordPacket as lqRecordPacket,
+  markConnected as lqMarkConnected,
+  markDisconnected as lqMarkDisconnected,
+} from './link-quality';
 
 /* ── Native config snapshot (pushed by grain-store before connect) ── */
 
@@ -212,6 +217,8 @@ async function ensureNativeListeners(plugin: MochiBlePlugin): Promise<void> {
     await plugin.addListener('grainReading', (payload) => {
       const reading = mapReading(payload);
       if (!reading) return;
+      // Real packet arrival → live link-quality observation (both paths).
+      lqRecordPacket(reading.signal);
       if (!readingCb) {
         earlyReadings.push(reading);
         if (earlyReadings.length > 50) earlyReadings.shift();
@@ -221,6 +228,7 @@ async function ensureNativeListeners(plugin: MochiBlePlugin): Promise<void> {
     });
     await plugin.addListener('grainConnection', (data) => {
       if (data?.state !== 'disconnected' || data.reason === 'deliberate') return;
+      lqMarkDisconnected(); // unexpected native drop — stop the live signal
       if (!disconnectCb) {
         earlyDisconnect = true;
         return;
@@ -263,12 +271,17 @@ export async function requestDevice(): Promise<DeviceInfo | null> {
 /** Native → MochiBle.connect() + startMonitoring(config snapshot). */
 export async function connect(): Promise<boolean> {
   const native = await getNative();
-  if (!native) return webBle.connect();
+  if (!native) {
+    const ok = await webBle.connect();
+    if (ok) lqMarkConnected(); // web GATT link up — begin link-quality observation
+    return ok;
+  }
 
   await ensureNativeListeners(native);
   try {
     const res = await native.connect();
     if (!res.connected) return false;
+    lqMarkConnected(); // native link up — begin link-quality observation
     try {
       await native.startMonitoring({
         settings: { ...(nativeConfig ?? {}), monitoringEnabled: true },
@@ -286,10 +299,15 @@ export async function connect(): Promise<boolean> {
 /** Native → MochiBle.connect() again (fresh bounded retry cycle). */
 export async function reconnect(): Promise<boolean> {
   const native = await getNative();
-  if (!native) return webBle.reconnect();
+  if (!native) {
+    const ok = await webBle.reconnect();
+    if (ok) lqMarkConnected();
+    return ok;
+  }
   await ensureNativeListeners(native);
   try {
     const res = await native.connect();
+    if (res.connected) lqMarkConnected();
     return res.connected;
   } catch {
     return false;
@@ -299,7 +317,12 @@ export async function reconnect(): Promise<boolean> {
 /** Register the reading handler (single slot, web-identical semantics). */
 export function onReading(callback: (reading: Reading) => void): void {
   if (!isNativeApp()) {
-    webBle.onReading(callback);
+    // Wrap so EVERY real web packet feeds the live link-quality observer
+    // (native packets are observed inside the grainReading listener).
+    webBle.onReading((reading) => {
+      lqRecordPacket(reading.signal);
+      callback(reading);
+    });
     return;
   }
   readingCb = callback;
@@ -312,7 +335,10 @@ export function onReading(callback: (reading: Reading) => void): void {
 /** Register the unexpected-disconnect handler (deliberate stops excluded). */
 export function onDisconnected(callback: () => void): void {
   if (!isNativeApp()) {
-    webBle.onDisconnected(callback);
+    webBle.onDisconnected(() => {
+      lqMarkDisconnected(); // GATT dropped — stop the live signal honestly
+      callback();
+    });
     return;
   }
   disconnectCb = callback;
@@ -324,6 +350,7 @@ export function onDisconnected(callback: () => void): void {
 
 /** Deliberate disconnect: native stops the service; web unchanged. */
 export function disconnect(): void {
+  lqMarkDisconnected(); // both paths — the live signal pill goes honest '—'
   if (!isNativeApp()) {
     webBle.disconnect();
     return;
@@ -401,13 +428,17 @@ export async function initNativeSession(
   await ensureNativeListeners(native);
   readingCb = onReadingCb;
   disconnectCb = onDisconnectedCb;
+  lqMarkConnected(); // status already verified 'connected' above
 
   try {
     const drained = await native.drainPendingReadings();
     const list = drained?.readings ?? [];
     for (const payload of list) {
       const reading = mapReading(payload);
-      if (reading) readingCb(reading);
+      if (reading) {
+        lqRecordPacket(reading.signal);
+        readingCb(reading);
+      }
     }
   } catch {
     // Queue drain is best-effort — a failed drain retries at next restore.
