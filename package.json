@@ -22,6 +22,7 @@
     "@capacitor/app": "^7",
     "@capacitor/cli": "^7",
     "@capacitor/core": "^7",
+    "@capacitor/haptics": "^7",
     "@capacitor/splash-screen": "^7",
     "@capacitor/status-bar": "^7",
     "@dnd-kit/core": "^6.3.1",

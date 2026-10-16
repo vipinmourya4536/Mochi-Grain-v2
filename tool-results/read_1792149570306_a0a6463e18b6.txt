@@ -1,0 +1,685 @@
+     1→Improve the integrity and accuracy of measurements throughout Mochi Grain. This is a hardware measurement system, not a simulated dashboard.
+     2→
+     3→The software must never claim that a measurement is scientifically accurate merely because it has been formatted, rounded, or passed through the Mochi engine.
+     4→
+     5→Inspect the real ESP32 firmware, hardware specifications, sensor models, calibration constants, BLE packet format, and app parser before changing measurement calculations.
+     6→
+     7→### Capacitive moisture sensing
+     8→
+     9→Establish what the physical capacitive probe measures. Do not automatically interpret an ADC reading as grain moisture percentage.
+    10→
+    11→If the hardware produces raw ADC counts, preserve raw readings and implement a documented calibration pipeline with:
+    12→- ADC resolution and input range.
+    13→- Sensor supply/reference voltage if relevant.
+    14→- Dry/wet calibration points or validated grain calibration data.
+    15→- Grain-specific relationships where supported by evidence.
+    16→- Temperature compensation only where justified by the hardware characterization.
+    17→- Noise filtering or repeated sampling based on documented hardware behavior.
+    18→- Calibration version, units, status, and provenance.
+    19→
+    20→Do not copy soil-moisture calibration curves into a grain moisture product without validating that they apply to this specific sensor and grain. Do not use generic calibration constants as proven measurements.
+    21→
+    22→### Temperature
+    23→
+    24→Inspect the actual temperature sensor and conversion code. Validate units, signed/unsigned decoding, byte order, measurement range, and rounding. Distinguish sensor readings from unavailable, disconnected, malformed, or physically implausible values.
+    25→
+    26→### Other hardware telemetry
+    27→
+    28→Validate battery reporting, signal quality, probe state, RTC timestamps, and any device status fields against actual firmware behavior. Do not display a constant battery percentage, fabricated signal strength, or placeholder firmware version as live telemetry.
+    29→
+    30→### Quality and provenance
+    31→
+    32→Extend the reading model only where necessary to represent:
+    33→- Raw hardware values.
+    34→- Calibrated values.
+    35→- Units.
+    36→- Capture timestamp and source.
+    37→- Calibration/configuration version.
+    38→- Validity/error status.
+    39→- Whether the reading is live or historical.
+    40→
+    41→Store the real measured values and preserve the original sample timestamp. Do not silently interpolate or replace missing measurements. Filtering may produce a separate derived value but must not erase the original raw measurement.
+    42→
+    43→### Rule engine integration
+    44→
+    45→Feed only valid, appropriately calibrated values into the risk engine. If calibration is not established, clearly identify the value as raw/unverified and avoid presenting it as a proven grain moisture percentage.
+    46→
+    47→Add hardware parser tests using actual known firmware packets and calibration validation tests using real reference measurements. Record the accuracy/error metrics obtained from hardware experiments. Do not invent a precision figure.
+    48→
+    49→Coordinate any protocol or firmware changes with the device's actual ESP32 implementation. Do not alter the app and firmware packet format independently.
+    50→
+    51→Prepare Mochi Grain for a coherent v2 production release.
+    52→
+    53→The app and the decision engine have separate versions. The engine source currently declares `MOCHI DECISION ENGINE v2.0`, so inspect that implementation rather than resetting or arbitrarily relabeling it. Set a consistent application version of 2.0.0 using the appropriate package, native Android, and release metadata once the migration is complete.
+    54→
+    55→Requirements:
+    56→- Remove demo-related UI, code, translations, assets, and outdated help text.
+    57→- Update version and About information consistently.
+    58→- Make connection, monitoring, and alert states explicit.
+    59→- Clearly distinguish last received data from live data.
+    60→- Never invent a current reading when the probe is unavailable.
+    61→- Provide clear permission, sensor error, calibration, BLE reconnecting, offline, and no-history states.
+    62→- Preserve the existing supported languages.
+    63→- Ensure settings updates are validated and persisted without corrupting old records.
+    64→- Preserve backup/export functionality.
+    65→- Verify first installation and upgrade from an existing installation.
+    66→- Check that service-worker updates do not wipe user history.
+    67→- Check that changes to native storage and IndexedDB do not create duplicate records.
+    68→- Verify that background monitoring survives ordinary app switching, while accurately handling system restrictions.
+    69→- Avoid unnecessary dependencies and keep mobile performance smooth.
+    70→- Audit logs and error reporting for leaked secrets or user data.
+    71→- Remove obsolete demo code only after confirming legitimate history and settings data are retained.
+    72→- Keep the PWA deployable throughout the migration.
+    73→
+    74→Do not mark the release final because the interface looks correct. Require actual build checks, navigation regression tests, real hardware validation, offline startup checks, and notification verification.
+    75→
+    76→Produce a release checklist and document any remaining limitations. Never mark a test as passing unless the test was actually executed.
+    77→
+    78→
+    79→Perform final quality assurance for Mochi Grain 2.0.0.
+    80→
+    81→Repository: https://github.com/vipinmourya4536/Mochi-grain
+    82→
+    83→Review all implemented phases. Do not add unrelated features or do a wholesale redesign during QA.
+    84→
+    85→### Navigation
+    86→Verify Back on all secondary tabs, Back on Home, open modal/detail closure, browser Back, native Android Back, and system edge gesture behavior. Confirm that navigation never disconnects monitoring or discards user data.
+    87→
+    88→### Real data
+    89→Search the production bundle and source for remaining demo generation, seeded random values, fake sensor packets, placeholder telemetry, synthetic connection states, and fabricated history insertion. Separate legitimate automated test fixtures from production application code.
+    90→
+    91→### Visual quality
+    92→Verify the top status bar in dark and light themes with every accent. Confirm that the orange accent never leaks into the whole status-bar region. Test the glass-intensity slider at minimum, middle, and maximum; test persistence and reduced motion. Verify that glass effects do not make important text difficult to read.
+    93→
+    94→### Settings and History
+    95→Confirm thresholds exist in Advanced Settings rather than the main settings view. Verify threshold ordering, persistence, and effects on real engine evaluations. Check the redesigned History with zero readings, one reading, many readings, both themes, and all supported languages. Ensure charts remain clean and useful rather than cluttered.
+    96→
+    97→### Offline PWA
+    98→Test a first online launch, a subsequent cold start with no internet, offline navigation, cached static assets, existing local history, service-worker updates, and recovery after a failed cache update.
+    99→
+   100→### Android BLE and notifications
+   101→On a physical Android device and the actual ESP32, verify authorization, reconnect after range loss, app backgrounding, screen locked, native monitoring status, real sensor history, warning notification, critical escalation, recovery, notification permission denial, and explicit stop/disconnect behavior.
+   102→
+   103→### Build and distribution
+   104→Run actual type checks, lint, unit tests, native project synchronization, and production build. Create a debug APK if the build environment supports it. Document the release signing procedure without including private signing keys or secrets in the repository.
+   105→
+   106→Return a test matrix with:
+   107→- Test description.
+   108→- Environment/device.
+   109→- Command or manual steps.
+   110→- Actual result.
+   111→- Pass/fail/not tested status.
+   112→- Remaining risk.
+   113→
+   114→Do not claim physical BLE tests succeeded without testing the actual hardware. Do not claim offline startup is complete based only on a manifest file. Do not claim an APK exists until the APK has been generated and its output path verified.
+   115→
+   116→Deliver the exact APK location if produced, release instructions, all remaining limitations, and a summary of the final app architecture.
+   117→
+   118→
+   119→important points to keep in mind 
+   120→1. Do not treat a sensor number as ground truth simply because it arrived over Bluetooth. First establish what the ESP32 packet actually represents. Raw ADC counts, calibrated grain moisture percentage, and temperature readings are different kinds of data. Calibration needs evidence from the real hardware.
+   121→2. Never let offline caching masquerade as live sensor monitoring. Mochi can load its interface and past history offline, but fresh measurements require the probe, and the Android service must be designed to receive them.
+   122→3. Do not overwrite the existing deployment to make Capacitor work. The current app uses Next.js standalone output. The Android build must be compatible with its actual runtime requirements, while preserving the existing hosted PWA.
+   123→4. Test one stage before starting the next. In particular, do not attempt to implement native Back handling, remove demo code, redesign History, add native BLE, and rewrite the build system in one agent run. That is an excellent way to produce a beautiful interface with three broken subsystems hiding underneath it.
+   124→The release goal is simple: Mochi Grain 2.0 should show genuine hardware data, explain risks using consistent rules, work offline wherever technically possible, and alert the user reliably without needing the dashboard to remain open. 🌾
+   125→
+   126→
+   127→and instead of using simple app icon as loading screen implement this as loading screen 
+   128→.three-body { --uib-size: 35px; --uib-speed: 0.8s; --uib-color: #5D3FD3; position: relative; display: inline-block; height: var(--uib-size); width: var(--uib-size); animation: spin78236 calc(var(--uib-speed) * 2.5) infinite linear; } .three-body__dot { position: absolute; height: 100%; width: 30%; } .three-body__dot:after { content: ''; position: absolute; height: 0%; width: 100%; padding-bottom: 100%; background-color: var(--uib-color); border-radius: 50%; } .three-body__dot:nth-child(1) { bottom: 5%; left: 0; transform: rotate(60deg); transform-origin: 50% 85%; } .three-body__dot:nth-child(1)::after { bottom: 0; left: 0; animation: wobble1 var(--uib-speed) infinite ease-in-out; animation-delay: calc(var(--uib-speed) * -0.3); } .three-body__dot:nth-child(2) { bottom: 5%; right: 0; transform: rotate(-60deg); transform-origin: 50% 85%; } .three-body__dot:nth-child(2)::after { bottom: 0; left: 0; animation: wobble1 var(--uib-speed) infinite calc(var(--uib-speed) * -0.15) ease-in-out; } .three-body__dot:nth-child(3) { bottom: -5%; left: 0; transform: translateX(116.666%); } .three-body__dot:nth-child(3)::after { top: 0; left: 0; animation: wobble2 var(--uib-speed) infinite ease-in-out; } @keyframes spin78236 { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } @keyframes wobble1 { 0%, 100% { transform: translateY(0%) scale(1); opacity: 1; } 50% { transform: translateY(-66%) scale(0.65); opacity: 0.8; } } @keyframes wobble2 { 0%, 100% { transform: translateY(0%) scale(1); opacity: 1; } 50% { transform: translateY(66%) scale(0.65); opacity: 0.8; } }<div class="three-body"> <div class="three-body__dot"></div> <div class="three-body__dot"></div> <div class="three-body__dot"></div> </div>
+   129→
+   130→
+   131→Act as a senior interaction designer and frontend engineer. Refine the existing Mochi Grain application into a production-quality mobile experience. Inspect the current implementation before changing it, reuse the existing design system, and preserve all hardware, offline, and monitoring functionality.
+   132→
+   133→The reference screenshots show the desired interaction direction. Do not copy them literally. Adapt their strongest ideas into a cohesive Mochi Grain design.
+   134→
+   135→1. Replace the current threshold sliders
+   136→
+   137→The moisture and temperature threshold sections currently contain too many large, vertically stacked slider controls. The result is bulky, repetitive, and visually exhausting, even inside Advanced Settings.
+   138→
+   139→Replace the current design with a compact, distinctive slider system.
+   140→
+   141→Design direction: precision instrument controls
+   142→
+   143→Each threshold should occupy a compact horizontal row or a small, carefully grouped control.
+   144→
+   145→For example:
+   146→
+   147→Moisture: SAFE, WARNING, CRITICAL.
+   148→
+   149→Temperature: SAFE, WARNING, CRITICAL.
+   150→
+   151→Glass intensity: one independent control.
+   152→
+   153→Each threshold row should show its label, current numerical value, and a slim interactive track. Use a compact orange thumb, a subtle track, and a restrained active-range treatment. Avoid repeating large labels, descriptions, shadows, and card padding for every individual slider.
+   154→
+   155→Group the three moisture controls into one compact panel and the three temperature controls into another. Use shared section headings, concise labels, and consistent spacing.
+   156→
+   157→Keep the Advanced Settings section collapsible. Within it, use a clear hierarchy:
+   158→
+   159→Moisture thresholds.
+   160→
+   161→Temperature thresholds.
+   162→
+   163→Glass intensity.
+   164→
+   165→Other advanced controls, if present.
+   166→
+   167→The user should be able to understand and adjust the important values without scrolling through a wall of large sliders.
+   168→
+   169→Create a distinctive slider interaction
+   170→
+   171→Do not simply restyle the browser's default range input.
+   172→
+   173→Build a reusable precision slider component with:
+   174→
+   175→A slim track and a clearly visible active segment.
+   176→
+   177→A compact, tactile thumb with a subtle glass or highlight treatment.
+   178→
+   179→Smooth thumb movement without lag.
+   180→
+   181→A small value label that updates while dragging.
+   182→
+   183→A settled value display after the interaction ends.
+   184→
+   185→A restrained active glow that follows the selected accent.
+   186→
+   187→A clear focus state for keyboard and accessibility users.
+   188→
+   189→A practical touch target even though the visible track is thin.
+   190→
+   191→The visible slider should be compact, but its interactive hit area must remain comfortable for touch.
+   192→
+   193→Use the third reference's slim red battery-style progress track and the fourth reference's minimalist pill toggle as inspiration for density and simplicity. Do not reproduce their exact colors or styling.
+   194→
+   195→Avoid large floating tooltips that cover adjacent controls. If a live value bubble is used, keep it small and position it intelligently.
+   196→
+   197→Haptics
+   198→
+   199→Provide optional, subtle haptic feedback for native Android interactions when supported.
+   200→
+   201→A short selection tick may occur when the user commits a new threshold or crosses a meaningful increment. Avoid firing a vibration on every pointer movement or every animation frame.
+   202→
+   203→Use a native haptics bridge or supported Capacitor haptics plugin for Android. Respect system and user preferences, and fail gracefully on platforms without haptic support.
+   204→
+   205→Do not pretend that a vibration occurred on browsers or devices that do not support it.
+   206→
+   207→Threshold correctness
+   208→
+   209→Retain the existing threshold configuration and persistence logic. Do not change the scientific meaning of the thresholds as part of this visual redesign.
+   210→
+   211→Maintain valid ordering between safe, warning, and critical values. Prevent invalid combinations during dragging, and update the existing Mochi Decision Engine with the final committed values.
+   212→
+   213→The component must support touch, mouse, keyboard, and assistive technology. Keep a readable numerical value available to screen readers.
+   214→
+   215→2. Refine the light and dark mode toggle
+   216→
+   217→Inspect the existing theme switch and replace its appearance with a compact, premium pill toggle inspired by the fourth reference.
+   218→
+   219→The control should have a slender rounded track, a smooth circular thumb, and a restrained transition. The thumb should move cleanly between light and dark positions.
+   220→
+   221→Use neutral track colors in both themes. A selected accent may appear as a tiny highlight, but the toggle must not become a large orange button.
+   222→
+   223→Requirements:
+   224→
+   225→Clear light/dark state.
+   226→
+   227→Smooth transition without excessive bounce.
+   228→
+   229→Accessible name and state.
+   230→
+   231→Correct persistence across reloads.
+   232→
+   233→No flash of the wrong theme on startup where the existing architecture allows it.
+   234→
+   235→Respect reduced-motion preferences.
+   236→
+   237→Preserve the existing theme settings and all current accent options.
+   238→
+   239→The system status bar must remain neutral: near-black in dark mode and near-white in light mode, independently of the accent selection.
+   240→
+   241→3. Improve the offline indicator
+   242→
+   243→The existing History screen displays a large offline banner with an icon, explanatory text, and extra details. It takes too much space for a state that can be communicated more simply.
+   244→
+   245→Replace the large banner with a compact status pill positioned in the upper-right area of the History header, using the existing layout and safe-area rules.
+   246→
+   247→Offline state should look like a small neutral pill:
+   248→
+   249→● Offline
+   250→
+   251→Keep the label short, legible, and visually consistent with the language selector or battery-status pill. Use a small indicator dot or restrained icon and a subtle background. Avoid a full-width warning panel.
+   252→
+   253→The indicator should reflect the actual network state, not a hard-coded value.
+   254→
+   255→Define these states separately:
+   256→
+   257→Online: no indicator or a subtle online state, depending on the existing design.
+   258→
+   259→Offline: compact Offline pill.
+   260→
+   261→Syncing: compact Syncing state only when synchronization is actually in progress.
+   262→
+   263→Error: an error indicator when a real synchronization or storage error occurs.
+   264→
+   265→Do not confuse internet connectivity with BLE connectivity. Mochi can be offline from the internet while still connected to the ESP32 and receiving live readings.
+   266→
+   267→When offline, locally stored history, settings, and available analytics must continue to work. The indicator should not suggest that local sensor monitoring has stopped unless the BLE state independently confirms that.
+   268→
+   269→Ensure the pill fits narrow screens, long translations, and both themes. It must not overlap the History title, reading summary, download/export button, or Android status bar.
+   270→
+   271→4. Implement the animated delete button
+   272→
+   273→Use the supplied delete-button code as a behavioral reference.
+   274→
+   275→The reference uses a circular icon button that expands horizontally on hover, changes to a destructive color, and reveals the word "Delete" through a smooth transition.
+   276→
+   277→Adapt this idea into a reusable Mochi Grain delete control.
+   278→
+   279→Visual behavior
+   280→
+   281→In its compact state, display a small trash icon in a circular or rounded-square neutral surface.
+   282→
+   283→On desktop hover, the control may expand smoothly into a wider pill, reveal the "Delete" label, and transition into a restrained destructive red treatment.
+   284→
+   285→On mobile, do not depend on hover. Use an appropriate tap interaction, clear pressed feedback, or a deliberate confirmation state. Never make a tap that merely touches the button delete data accidentally.
+   286→
+   287→Use the supplied SVG icon or an equivalent optimized icon from the project's existing icon library. Keep the implementation consistent with the current React and CSS architecture.
+   288→
+   289→Requirements:
+   290→
+   291→Smooth width, opacity, and icon transitions.
+   292→
+   293→No layout shifts that push surrounding content around.
+   294→
+   295→No accidental activation while scrolling.
+   296→
+   297→Accessible label and keyboard activation.
+   298→
+   299→Visible focus state.
+   300→
+   301→Reduced-motion support.
+   302→
+   303→No external UI dependency solely for this button.
+   304→
+   305→No overflow or clipping in narrow layouts.
+   306→
+   307→Destructive-action safety
+   308→
+   309→Apply this control to the appropriate existing delete actions, such as removing a selected history record or clearing history, without introducing new destructive actions unnecessarily.
+   310→
+   311→For clearing all history, use a clear confirmation step that explains what will be deleted. Do not allow a hover animation to trigger deletion.
+   312→
+   313→Preserve valid settings, device associations, and unrelated records. A history deletion must not silently disconnect the probe or disable background monitoring.
+   314→
+   315→After deletion, update the UI and persistent storage consistently.
+   316→
+   317→5. Make the liquid-glass appearance cohesive
+   318→
+   319→Reuse the existing glassOpacity preference and connect it to the actual rendering system.
+   320→
+   321→The compact sliders, pill toggles, offline indicator, history controls, and delete button must all belong to the same visual language.
+   322→
+   323→Use:
+   324→
+   325→Fine translucent surfaces.
+   326→
+   327→Subtle inner edge highlights.
+   328→
+   329→Carefully restrained backdrop blur.
+   330→
+   331→Small specular reflections.
+   332→
+   333→Consistent corner radii.
+   334→
+   335→Soft shadows rather than large glowing halos.
+   336→
+   337→Accent color only on active controls and deliberate emphasis.
+   338→
+   339→Glass intensity should affect the intended glass surfaces consistently, without reducing text contrast or altering system-bar colors.
+   340→
+   341→Avoid applying strong blur to every chart or every text block. History plots and sensor values must remain crisp.
+   342→
+   343→Provide a graceful fallback when backdrop filters are unavailable. Keep animations performant on lower-powered Android devices.
+   344→
+   345→6. Engineering and regression requirements
+   346→
+   347→Inspect the actual components before implementing the changes. Reuse existing state management, settings persistence, translations, and design tokens.
+   348→
+   349→Do not create separate, competing state for sliders, theme, or network status. Avoid adding a UI framework or animation library unless the repository already uses it or a genuine technical need is demonstrated.
+   350→
+   351→Test:
+   352→
+   353→All six threshold controls.
+   354→
+   355→Minimum, maximum, and intermediate slider values.
+   356→
+   357→Valid threshold ordering.
+   358→
+   359→Settings persistence after reload.
+   360→
+   361→Haptics on supported Android devices.
+   362→
+   363→Theme switching in both directions.
+   364→
+   365→Every current accent color.
+   366→
+   367→Offline pill behavior with internet disconnected but BLE connected.
+   368→
+   369→Online and synchronization states.
+   370→
+   371→Delete confirmation and persistent history updates.
+   372→
+   373→Keyboard navigation, touch interaction, and reduced motion.
+   374→
+   375→Small Android screens and larger desktop layouts.
+   376→
+   377→Light and dark themes.
+   378→
+   379→Run the existing lint, type-check, and production build. Provide before/after screenshots where the environment supports them.
+   380→
+   381→Do not claim real-device haptics, BLE behavior, or Android rendering has been verified unless tested on an actual device.
+   382→
+   383→The finished interface should feel like a compact precision instrument with a premium glass finish, not a settings page filled with oversized controls.
+   384→
+   385→
+   386→
+   387→You are refining the current Mochi Grain 2.0 application, not building a new app.
+   388→
+   389→Inspect the latest `main` branch before making changes. Preserve the current working features, native/PWA architecture, real hardware-only data pipeline, Back navigation, offline storage, Mochi decision engine, and background-monitoring work.
+   390→
+   391→The supplied screenshots are the visual references for this task.
+   392→
+   393→The current problem is excessive visual density in Advanced Settings. The moisture thresholds, temperature thresholds, and glass-intensity controls are individually functional, but their large cards, repeated headings, vertical spacing, and conventional range inputs make the screen feel like a collection of configuration forms rather than a premium instrument interface.
+   394→
+   395→The goal is a compact, precise, tactile, liquid-glass interface with distinctive interactions and minimal visual clutter.
+   396→
+   397→## 1. Redesign the threshold controls into one compact control panel
+   398→
+   399→Inspect `src/components/grain/settings/settings-tab.tsx`, particularly `ThresholdsCard`, `GlassIntensityCard`, `THRESHOLD_ROW_META`, and the current Advanced Settings section.
+   400→
+   401→Keep the threshold controls inside the collapsed Advanced Settings section.
+   402→
+   403→Do not simply shrink the existing cards. Redesign the information hierarchy and interaction model.
+   404→
+   405→Create a compact threshold-control panel with an elegant segmented selector for:
+   406→
+   407→- Moisture
+   408→- Temperature
+   409→
+   410→Only the selected category's three threshold sliders should be visible at once. Changing the segment must not alter stored values.
+   411→
+   412→For the selected category, show SAFE, WARNING, and CRITICAL as three compact rows inside one cohesive glass panel.
+   413→
+   414→Each row should contain:
+   415→- A small, clearly readable severity label.
+   416→- A right-aligned numerical value with the correct unit.
+   417→- A custom compact slider with a slim track and carefully designed thumb.
+   418→- A restrained visual indication of the current value and permitted range.
+   419→
+   420→Keep the label and value on a single line where possible. Use tight but comfortable vertical spacing. Avoid a separate large card for every threshold category.
+   421→
+   422→The full threshold control should occupy substantially less vertical space than the current three-card arrangement, without sacrificing readability or touch accuracy.
+   423→
+   424→Preserve the existing `settings.thresholds` model, grain profiles, threshold-ordering constraints, and `updateSettings` persistence flow.
+   425→
+   426→Use the existing `src/lib/thresholds.ts` bounds and validation logic rather than introducing a second set of unrelated constraints.
+   427→
+   428→Changing a threshold must immediately update the value displayed by the slider and affect subsequent Mochi evaluations. The values must survive theme changes, reloads, and application restarts.
+   429→
+   430→Do not silently reset the selected grain's thresholds or change existing defaults to make the visual design easier.
+   431→
+   432→## 2. Build a distinctive, compact, interactive slider system
+   433→
+   434→The supplied slider references demonstrate tactile track interaction, a clearly defined thumb, a compact visual footprint, and immediate value feedback.
+   435→
+   436→Use them as inspiration, but create a consistent slider design specifically for Mochi.
+   437→
+   438→Do not retain the ordinary browser range appearance unchanged. Do not use an oversized circular thumb or a large glowing track.
+   439→
+   440→Design a reusable slider component for threshold values and glass intensity.
+   441→
+   442→### Visual behavior
+   443→
+   444→The resting slider should have a slim, low-profile track, a precise thumb, and a subtle active-range fill.
+   445→
+   446→The thumb should have a layered appearance using a small inner highlight, a restrained border, and a soft shadow. Use the selected accent color for deliberate interactive details without coloring the entire card.
+   447→
+   448→During dragging:
+   449→- The thumb should respond immediately to pointer movement.
+   450→- The active segment should update continuously.
+   451→- The current numerical value should remain clearly visible.
+   452→- A small floating value indicator or equivalent subtle feedback may appear near the thumb if it improves precision on mobile.
+   453→- The thumb may grow slightly or gain a soft highlight while actively dragging.
+   454→- Pointer release should settle into a clean resting state.
+   455→
+   456→Add a subtle pressed state, restrained easing, and a polished keyboard-focus state.
+   457→
+   458→The effect should feel precise and responsive, not elastic or playful to the point of distraction.
+   459→
+   460→Use pointer and native range semantics appropriately. Do not implement a fragile custom drag system that breaks keyboard accessibility or screen readers.
+   461→
+   462→### Haptic feedback
+   463→
+   464→Integrate with the existing `src/lib/haptics.ts` utility and the user's `settings.hapticsEnabled` preference.
+   465→
+   466→On native Android, use the existing or planned Capacitor Haptics integration where available. On supported PWA devices, use the existing browser capability as a fallback.
+   467→
+   468→Provide restrained feedback when the slider crosses meaningful discrete steps, and a subtle confirmation when a drag finishes.
+   469→
+   470→Avoid firing a vibration on every rendering frame or flooding the device during rapid dragging. Throttle feedback and trigger it only when an actual configured value step changes.
+   471→
+   472→Do not claim haptic support on platforms where it is unavailable.
+   473→
+   474→The component must work with touch, mouse, keyboard, and assistive technology. Support reduced-motion preferences.
+   475→
+   476→## 3. Make glass intensity compact and immediately responsive
+   477→
+   478→Use the existing `src/lib/glass.ts`, `GLASS_MIN`, `GLASS_MAX`, `clampGlass`, and `computeGlassVars` implementation.
+   479→
+   480→Do not introduce a second glass-intensity calculation.
+   481→
+   482→Retain the glass-intensity setting in Advanced Settings, but reduce its visual footprint.
+   483→
+   484→Present it as a single compact glass-control row containing a short label, percentage value, and the same reusable custom slider.
+   485→
+   486→Remove the oversized explanatory paragraph and excessive padding. Replace it with one concise helper sentence or a small descriptive hint.
+   487→
+   488→Changing the slider must immediately update the actual interface, including the relevant frosting, translucency, blur, highlights, borders, and reflective surfaces.
+   489→
+   490→The chosen intensity must persist. Verify low, medium, and high settings in both themes.
+   491→
+   492→Do not apply blur to text itself. Keep sensor readings, critical thresholds, labels, chart values, and touch targets legible.
+   493→
+   494→Ensure the control does not cause layout shifts or unnecessary component remounts while dragging.
+   495→
+   496→## 4. Refine the dark/light theme toggle
+   497→
+   498→Inspect the current theme toggle in `src/components/grain/settings/settings-tab.tsx`.
+   499→
+   500→Keep the existing explicit dark/light preference and its persistence.
+   501→
+   502→Refine the switch to match the minimalist toggle reference: a compact rounded track, a precisely aligned circular thumb, subtle depth, and a smooth short transition.
+   503→
+   504→The switch should feel like a physical glass control rather than an ordinary form checkbox.
+   505→
+   506→Use neutral track and thumb colors as the primary design. A restrained accent may appear as a small highlight, but changing from dark to light must not flood the entire switch or its surrounding card with orange.
+   507→
+   508→Use a clear sun/moon indicator or a small adjacent label so the current theme is immediately understandable.
+   509→
+   510→The thumb must remain correctly aligned at all widths and must not jump or overflow.
+   511→
+   512→Use proper accessible switch semantics, including a label, checked state, keyboard interaction, and visible focus indication.
+   513→
+   514→Trigger the existing haptic utility on a genuine user-initiated theme change when haptics are enabled.
+   515→
+   516→Do not animate the entire application through a disruptive full-screen transition. Theme changes should be smooth and restrained.
+   517→
+   518→Preserve the existing theme-driven status-bar colors: near-black in dark mode and off-white in light mode, never the accent color.
+   519→
+   520→## 5. Replace the verbose offline banner with one compact status pill
+   521→
+   522→Inspect the latest `src/components/grain/header.tsx`, the `.grain-offline-chip` styling in `src/app/globals.css`, and the entire repository for any full-width offline information banner.
+   523→
+   524→The screenshot shows an oversized History banner explaining that data stays on the device and that Discover requires internet. This information is too verbose for a persistent dashboard status.
+   525→
+   526→Remove duplicate, persistent offline explanation banners wherever they exist.
+   527→
+   528→The sole persistent network indicator should be in the top-right header action cluster beside the battery capsule and language control, styled as a small rounded pill of matching height and visual weight.
+   529→
+   530→Show only:
+   531→
+   532→**Offline**
+   533→
+   534→A small disconnected-network icon is optional. Do not show multiple sentences, explanations, descriptions of local storage, or an expanded warning card.
+   535→
+   536→Use neutral, subtle styling that fits both dark and light themes. Do not make it look like a moisture warning or critical storage alert.
+   537→
+   538→The pill should occupy very little horizontal space and must not push the app title off-screen on narrow phones.
+   539→
+   540→Use the existing localized offline label from `src/lib/i18n.ts`.
+   541→
+   542→Keep the indicator visible only when the application is genuinely offline according to its connectivity state. Hiding the pill must never imply that BLE is connected, and showing it must never imply the probe is disconnected. Internet connectivity and device connectivity are separate states.
+   543→
+   544→Do not remove the offline functionality itself. Local readings, history, settings, and the offline engine must continue to operate as supported.
+   545→
+   546→If the screenshot's larger banner is not present on `main`, trace all components, alternate layouts, deployed bundles, and service-worker caches before deciding that it is fixed. Identify whether the screenshot reflects an older deployed version, another component, or stale cached UI. Do not blindly delete unrelated status messaging.
+   547→
+   548→## 6. Implement the supplied animated delete-button interaction
+   549→.button {
+   550→  width: 50px;
+   551→  height: 50px;
+   552→  border-radius: 50%;
+   553→  background-color: rgb(20, 20, 20);
+   554→  border: none;
+   555→  font-weight: 600;
+   556→  display: flex;
+   557→  align-items: center;
+   558→  justify-content: center;
+   559→  box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.164);
+   560→  cursor: pointer;
+   561→  transition-duration: .3s;
+   562→  overflow: hidden;
+   563→  position: relative;
+   564→}
+   565→
+   566→.svgIcon {
+   567→  width: 12px;
+   568→  transition-duration: .3s;
+   569→}
+   570→
+   571→.svgIcon path {
+   572→  fill: white;
+   573→}
+   574→
+   575→.button:hover {
+   576→  width: 140px;
+   577→  border-radius: 50px;
+   578→  transition-duration: .3s;
+   579→  background-color: rgb(255, 69, 69);
+   580→  align-items: center;
+   581→}
+   582→
+   583→.button:hover .svgIcon {
+   584→  width: 50px;
+   585→  transition-duration: .3s;
+   586→  transform: translateY(60%);
+   587→}
+   588→
+   589→.button::before {
+   590→  position: absolute;
+   591→  top: -20px;
+   592→  content: "Delete";
+   593→  color: white;
+   594→  transition-duration: .3s;
+   595→  font-size: 2px;
+   596→}
+   597→
+   598→.button:hover::before {
+   599→  font-size: 13px;
+   600→  opacity: 1;
+   601→  transform: translateY(30px);
+   602→  transition-duration: .3s;
+   603→}
+   604→<button class="button">
+   605→  <svg viewBox="0 0 448 512" class="svgIcon"><path d="M135.2 17.7L128 32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H320l-7.2-14.3C307.4 6.8 296.3 0 284.2 0H163.8c-12.1 0-23.2 6.8-28.6 17.7zM416 128H32L53.2 467c1.6 25.3 22.6 45 47.9 45H346.9c25.3 0 46.3-19.7 47.9-45L416 128z"></path></svg>
+   606→</button>
+   607→
+   608→
+   609→Adapt the supplied HTML/CSS delete-button reference to the existing React and TypeScript codebase.
+   610→
+   611→Do not paste the standalone snippet unchanged. Implement a proper reusable React button using the existing icon library and the project's design tokens.
+   612→
+   613→The reference interaction is a compact circular dark button that smoothly expands into a pill displaying "Delete", with its trash icon transitioning as the button expands.
+   614→
+   615→Use this interaction pattern for the destructive Clear History action in the History analytics section and any equivalent Clear History control in Advanced Settings where it is appropriate.
+   616→
+   617→### Required behavior
+   618→
+   619→At rest, the control should be compact and visually quiet.
+   620→
+   621→On hover, keyboard focus, or an appropriate supported interaction, it should smoothly expand into a rounded pill that reveals the localized delete label.
+   622→
+   623→The icon should have a subtle, deliberate movement and remain recognizable throughout the animation. Do not shrink it into illegibility or move it outside the visible button area.
+   624→
+   625→Use a restrained destructive red when the control is activated, hovered, or focused. Keep the rest of the interface neutral.
+   626→
+   627→The animation must not cause horizontal overflow, shift adjacent content unpredictably, overlap controls, or enlarge the entire card.
+   628→
+   629→For touch devices, do not require the user to hover or guess how to reveal the action. Maintain a sufficiently large accessible touch target and let tapping the control open the existing or improved confirmation dialog.
+   630→
+   631→**Important: clicking this animated button must not immediately delete history.** Open a clear confirmation dialog first. Only the explicit confirmation performs the deletion.
+   632→
+   633→Preserve the existing Back-navigation integration: Android Back should close the confirmation dialog before navigating away.
+   634→
+   635→After confirmed deletion, update the UI from actual storage state and display the existing success feedback only when the deletion succeeds.
+   636→
+   637→Support disabled, processing, success, and reduced-motion states where necessary. Respect the current haptic preference with a restrained confirmation tap.
+   638→
+   639→Use accessible button semantics and explicit names such as "Clear history". Do not rely on hover-only text as the accessible label.
+   640→
+   641→Reuse the animation component instead of copying slightly different button implementations into multiple files.
+   642→
+   643→## 7. Apply polish consistently without over-designing
+   644→
+   645→The result should retain Mochi's existing visual identity and liquid-glass language.
+   646→
+   647→Use restrained blur, thin translucent borders, specular highlights, controlled shadows, and carefully considered spacing.
+   648→
+   649→Avoid:
+   650→- Large nested cards for every individual setting.
+   651→- Repeated section headings.
+   652→- Thick conventional sliders.
+   653→- Permanent large offline banners.
+   654→- Excessive orange backgrounds.
+   655→- Huge glowing slider thumbs.
+   656→- Unnecessary animated backgrounds.
+   657→- Excessive vibration or sound.
+   658→- Hover-only interactions on touch screens.
+   659→- Decorative effects that reduce readability.
+   660→
+   661→Reuse the current CSS variables and styling conventions in `src/app/globals.css`. Prefer reusable components and small, maintainable changes over introducing another styling system.
+   662→
+   663→Test 320px, 360px, 390px, and 430px mobile widths where possible. Check portrait layout, safe areas, bottom navigation, keyboard focus, touch interactions, and both dark and light themes.
+   664→
+   665→## 8. Regression tests and delivery requirements
+   666→
+   667→Do not modify the BLE packet protocol, real-sensor data path, automatic reconnection logic, offline persistence, Mochi risk rules, or Android background-monitoring service as part of this visual refinement except where an explicit integration dependency requires it.
+   668→
+   669→Verify:
+   670→1. Moisture and temperature controls switch without losing their independent values.
+   671→2. Thresholds preserve valid ordering and affect Mochi's next evaluation.
+   672→3. Slider haptics respect the saved preference, are throttled, and fail gracefully on unsupported devices.
+   673→4. Glass intensity updates the actual interface immediately and persists after reload.
+   674→5. Theme selection persists and never recolors system chrome with the accent.
+   675→6. Only the compact offline pill remains as the persistent network indicator.
+   676→7. The delete animation works with mouse, touch, keyboard focus, and reduced motion.
+   677→8. Cancellation in the delete confirmation leaves history untouched.
+   678→9. Confirmed deletion removes actual stored records and never resets monitoring unexpectedly.
+   679→10. The application continues to show genuine readings only, with no demo or simulated values.
+   680→
+   681→Run actual TypeScript, lint, build, and relevant automated tests. If a physical Android device is available, verify haptics, gestures, and responsive interaction on-device.
+   682→
+   683→Report the exact files modified, tests executed, actual results, and any remaining issue. Do not claim tests or device checks that were not performed.
+   684→
+   685→Commit this as a separate, reviewable UI refinement change where repository permissions allow. Preserve the existing deployment and all unrelated work.

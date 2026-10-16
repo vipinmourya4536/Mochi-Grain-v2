@@ -1,0 +1,795 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useRef, useEffect } from 'react';
+     4→     4→import { createPortal } from 'react-dom';
+     5→     5→import { useGrainStore } from '@/lib/grain-store';
+     6→     6→import {
+     7→     7→  Cpu, DownloadSimple, ArrowClockwise, Trash, Power, Wrench,
+     8→     8→  Sun, Moon, CaretDown, SlidersHorizontal, Palette, Check,
+     9→     9→  DeviceMobile, Archive, UploadSimple, ArrowsClockwise, Warning, FileCsv,
+    10→    10→} from '@phosphor-icons/react/dist/ssr';
+    11→    11→import { type GrainType, type AccentColor, GRAIN_OPTIONS } from '@/lib/grain-types';
+    12→    12→import { t, tp, tGrain, type AppLanguage } from '@/lib/i18n';
+    13→    13→import { haptic, HAPTIC_SELECT } from '@/lib/haptics';
+    14→    14→import { buildReadingsCsv, deliverCsv } from '@/lib/csv-export';
+    15→    15→import { playSafeAlert } from '@/lib/alert-sound';
+    16→    16→import { usePwaInstall } from '@/lib/pwa';
+    17→    17→import { registerBackConsumer } from '@/lib/back-nav';
+    18→    18→import { exportBackupJSON, importBackupJSON } from '@/lib/offline-storage';
+    19→    19→import {
+    20→    20→  sliderBounds, clampThresholdEdit,
+    21→    21→  MOISTURE_KEYS, TEMPERATURE_KEYS,
+    22→    22→  type ThresholdKey,
+    23→    23→} from '@/lib/thresholds';
+    24→    24→import { GLASS_MIN, GLASS_MAX, clampGlass } from '@/lib/glass';
+    25→    25→import { ENGINE_VERSION } from '@/lib/mochi-engine';
+    26→    26→import { format } from 'date-fns';
+    27→    27→
+    28→    28→/** Overall app version — distinct from the engine version (ENGINE_VERSION). */
+    29→    29→const APP_VERSION = '2.0.0';
+    30→    30→
+    31→    31→const ACCENT_COLORS: { value: AccentColor; color: string; labelKey: string }[] = [
+    32→    32→  { value: 'orange', color: '#F97316', labelKey: 'accent.orange' },
+    33→    33→  { value: 'green', color: '#22C55E', labelKey: 'accent.green' },
+    34→    34→  { value: 'purple', color: '#A855F7', labelKey: 'accent.purple' },
+    35→    35→  { value: 'blue', color: '#3B82F6', labelKey: 'accent.blue' },
+    36→    36→  { value: 'teal', color: '#14B8A6', labelKey: 'accent.teal' },
+    37→    37→];
+    38→    38→
+    39→    39→export function SettingsTab() {
+    40→    40→  const {
+    41→    41→    deviceInfo, settings, updateSettings, selectGrainType,
+    42→    42→    disconnectProbe, sendProbeCommand, hasDevice, showToast,
+    43→    43→  } = useGrainStore();
+    44→    44→  const { canInstall, isStandalone, promptInstall } = usePwaInstall();
+    45→    45→
+    46→    46→  const lang = settings.language as AppLanguage;
+    47→    47→  const isDark = settings.theme === 'dark';
+    48→    48→  const [advancedOpen, setAdvancedOpen] = useState(false);
+    49→    49→  const hasConnection = hasDevice;
+    50→    50→
+    51→    51→  return (
+    52→    52→    <div className="pt-2 pb-6 grain-fade-in">
+    53→    53→      <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: 'var(--gm-text-primary)' }}>
+    54→    54→        {t('settings.title', lang)}
+    55→    55→      </h2>
+    56→    56→      <p className="text-sm mb-6" style={{ color: 'var(--gm-text-secondary)' }}>
+    57→    57→        {t('settings.desc', lang)}
+    58→    58→      </p>
+    59→    59→
+    60→    60→      {/* ═══ BASIC SETTINGS ═══ */}
+    61→    61→
+    62→    62→      {/* ─── Theme Toggle ─── */}
+    63→    63→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+    64→    64→        {t('theme.title', lang)}
+    65→    65→      </p>
+    66→    66→      <div className="grain-card overflow-hidden mb-6">
+    67→    67→        <button
+    68→    68→          onClick={() => updateSettings({ theme: isDark ? 'light' : 'dark' })}
+    69→    69→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+    70→    70→        >
+    71→    71→          <div className="flex items-center gap-3">
+    72→    72→            <div
+    73→    73→              className="w-9 h-9 rounded-xl flex items-center justify-center"
+    74→    74→              style={{ background: 'var(--gm-accent-dim)' }}
+    75→    75→            >
+    76→    76→              {isDark
+    77→    77→                ? <Moon size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+    78→    78→                : <Sun size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />}
+    79→    79→            </div>
+    80→    80→            <div>
+    81→    81→              <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+    82→    82→                {isDark ? t('theme.dark', lang) : t('theme.light', lang)}
+    83→    83→              </span>
+    84→    84→              <p className="text-[10px] mt-0.5" style={{ color: 'var(--gm-text-tertiary)' }}>
+    85→    85→                {t('theme.tap_switch', lang)}
+    86→    86→              </p>
+    87→    87→            </div>
+    88→    88→          </div>
+    89→    89→          <div className="w-11 h-6 rounded-full relative" style={{ background: isDark ? 'var(--gm-toggle-bg)' : 'var(--gm-accent)', border: `1px solid ${isDark ? 'var(--gm-toggle-border)' : 'var(--gm-accent)'}` }}>
+    90→    90→            <div
+    91→    91→              className="w-5 h-5 rounded-full absolute top-0.5 transition-all"
+    92→    92→              style={{
+    93→    93→                left: isDark ? '2px' : '22px',
+    94→    94→                background: isDark ? 'var(--gm-toggle-thumb)' : '#fff',
+    95→    95→                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+    96→    96→              }}
+    97→    97→            />
+    98→    98→          </div>
+    99→    99→        </button>
+   100→   100→      </div>
+   101→   101→
+   102→   102→      {/* ─── Device ─── */}
+   103→   103→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   104→   104→        {t('settings.device', lang)}
+   105→   105→      </p>
+   106→   106→      <div className="grain-card p-5 mb-6">
+   107→   107→        <div className="flex items-center gap-4 mb-5">
+   108→   108→          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'var(--gm-toggle-bg)', border: '1px solid var(--gm-toggle-border)' }}>
+   109→   109→            <Cpu size={22} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   110→   110→          </div>
+   111→   111→          <div>
+   112→   112→            <h3 className="font-bold text-sm tracking-tight" style={{ color: 'var(--gm-text-primary)' }}>
+   113→   113→              {deviceInfo?.name || '—'}
+   114→   114→            </h3>
+   115→   115→            <p className="text-[11px] mt-0.5" style={{ color: 'var(--gm-text-secondary)' }}>
+   116→   116→              {deviceInfo ? `${deviceInfo.firmware} · ${deviceInfo.platform}` : t('settings.no_device', lang)}
+   117→   117→            </p>
+   118→   118→          </div>
+   119→   119→        </div>
+   120→   120→        <div className="flex gap-3">
+   121→   121→          <button
+   122→   122→            onClick={async () => {
+   123→   123→              if (!hasConnection) {
+   124→   124→                showToast(t('settings.connect_first', lang));
+   125→   125→                return;
+   126→   126→              }
+   127→   127→              await sendProbeCommand('calibrate');
+   128→   128→            }}
+   129→   129→            disabled={!hasConnection}
+   130→   130→            className="flex-1 font-bold text-xs py-3.5 rounded-xl active:scale-95 transition-all tracking-wide"
+   131→   131→            style={{
+   132→   132→              background: hasConnection ? 'var(--gm-btn-primary-bg)' : 'var(--gm-toggle-bg)',
+   133→   133→              color: hasConnection ? 'var(--gm-btn-primary-text)' : 'var(--gm-text-tertiary)',
+   134→   134→              border: hasConnection ? 'none' : '1px solid var(--gm-toggle-border)',
+   135→   135→              cursor: hasConnection ? 'pointer' : 'not-allowed',
+   136→   136→            }}
+   137→   137→          >
+   138→   138→            {t('settings.calibrate', lang)}
+   139→   139→          </button>
+   140→   140→          {hasConnection ? (
+   141→   141→            <button
+   142→   142→              onClick={disconnectProbe}
+   143→   143→              className="px-4 py-3.5 rounded-xl active:scale-95 transition-all font-bold text-xs"
+   144→   144→              style={{
+   145→   145→                background: 'rgba(239, 68, 68, 0.1)',
+   146→   146→                color: '#EF4444',
+   147→   147→                border: '1px solid rgba(239, 68, 68, 0.2)',
+   148→   148→              }}
+   149→   149→            >
+   150→   150→              <Power size={18} weight="bold" />
+   151→   151→            </button>
+   152→   152→          ) : null}
+   153→   153→        </div>
+   154→   154→      </div>
+   155→   155→
+   156→   156→      {/* ─── Grain Type – the ONLY grain selector in the app ─── */}
+   157→   157→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   158→   158→        {t('settings.grain_type', lang)}
+   159→   159→      </p>
+   160→   160→      <div className="grain-card p-2.5 mb-6">
+   161→   161→        <div className="grid grid-cols-3 gap-2">
+   162→   162→          {GRAIN_OPTIONS.map((g) => {
+   163→   163→            const isActive = settings.grainType === g;
+   164→   164→            return (
+   165→   165→              <button
+   166→   166→                key={g}
+   167→   167→                onClick={() => {
+   168→   168→                  if (g === settings.grainType) return;
+   169→   169→                  haptic(settings.hapticsEnabled, HAPTIC_SELECT);
+   170→   170→                  selectGrainType(g);
+   171→   171→                }}
+   172→   172→                className={`grain-grain-card ${isActive ? 'active' : ''}`}
+   173→   173→                aria-pressed={isActive}
+   174→   174→              >
+   175→   175→                <span className="truncate">{tGrain(g, lang)}</span>
+   176→   176→                {isActive && <Check size={12} weight="bold" style={{ flexShrink: 0 }} />}
+   177→   177→              </button>
+   178→   178→            );
+   179→   179→          })}
+   180→   180→        </div>
+   181→   181→      </div>
+   182→   182→
+   183→   183→      {/* ═══ Threshold sliders live in ADVANCED SETTINGS (see below) —
+   184→   184→             the main view stays focused on daily controls. ═══ */}
+   185→   185→
+   186→   186→      {/* ═══ PREFERENCES ═══ */}
+   187→   187→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   188→   188→        {t('settings.preferences', lang)}
+   189→   189→      </p>
+   190→   190→      <div className="grain-card overflow-hidden mb-6">
+   191→   191→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   192→   192→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.push_alerts', lang)}</span>
+   193→   193→          <input type="checkbox" checked={settings.pushAlerts} onChange={(e) => { updateSettings({ pushAlerts: e.target.checked }); showToast(e.target.checked ? t('toast.alerts_on', lang) : t('toast.alerts_off', lang)); }} className="grain-toggle" />
+   194→   194→        </label>
+   195→   195→        <div className="grain-separator" />
+   196→   196→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   197→   197→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.auto_sync', lang)}</span>
+   198→   198→          <input type="checkbox" checked={settings.autoSync} onChange={(e) => { updateSettings({ autoSync: e.target.checked }); showToast(e.target.checked ? t('toast.autosync_on', lang) : t('toast.autosync_off', lang)); }} className="grain-toggle" />
+   199→   199→        </label>
+   200→   200→        <div className="grain-separator" />
+   201→   201→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   202→   202→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.auto_reconnect', lang)}</span>
+   203→   203→          <input type="checkbox" checked={settings.autoReconnect} onChange={(e) => { updateSettings({ autoReconnect: e.target.checked }); }} className="grain-toggle" />
+   204→   204→        </label>
+   205→   205→        <div className="grain-separator" />
+   206→   206→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   207→   207→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.haptics', lang)}</span>
+   208→   208→          <input type="checkbox" checked={settings.hapticsEnabled} onChange={(e) => { updateSettings({ hapticsEnabled: e.target.checked }); haptic(e.target.checked, 14); }} className="grain-toggle" />
+   209→   209→        </label>
+   210→   210→        <div className="grain-separator" />
+   211→   211→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   212→   212→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.sound', lang)}</span>
+   213→   213→          <input type="checkbox" checked={settings.soundAlerts} onChange={(e) => { updateSettings({ soundAlerts: e.target.checked }); if (e.target.checked) playSafeAlert(true); }} className="grain-toggle" />
+   214→   214→        </label>
+   215→   215→        <div className="grain-separator" />
+   216→   216→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   217→   217→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.wake_on_connect', lang)}</span>
+   218→   218→          <input type="checkbox" checked={settings.wakeOnConnect} onChange={(e) => { updateSettings({ wakeOnConnect: e.target.checked }); }} className="grain-toggle" />
+   219→   219→        </label>
+   220→   220→      </div>
+   221→   221→
+   222→   222→      {/* ─── Install App (PWA) ─── */}
+   223→   223→      {canInstall && !isStandalone && (
+   224→   224→        <div className="grain-card overflow-hidden mb-6">
+   225→   225→          <button
+   226→   226→            onClick={async () => {
+   227→   227→              const outcome = await promptInstall();
+   228→   228→              if (outcome === 'accepted') showToast(t('toast.install_ok', lang));
+   229→   229→              else if (outcome === 'dismissed') showToast(t('toast.install_dismissed', lang));
+   230→   230→            }}
+   231→   231→            className="w-full flex justify-between items-center px-5 py-4 text-left"
+   232→   232→            style={{ color: 'var(--gm-text-primary)' }}
+   233→   233→          >
+   234→   234→            <div className="flex items-center gap-3">
+   235→   235→              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--gm-accent-dim)' }}>
+   236→   236→                <DeviceMobile size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   237→   237→              </div>
+   238→   238→              <span className="text-sm font-medium">{t('settings.install_app', lang)}</span>
+   239→   239→            </div>
+   240→   240→            <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.install_desc', lang)}</span>
+   241→   241→          </button>
+   242→   242→        </div>
+   243→   243→      )}
+   244→   244→
+   245→   245→      {/* ═══ ABOUT ═══ */}
+   246→   246→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   247→   247→        {t('settings.about', lang)}
+   248→   248→      </p>
+   249→   249→      <div className="grain-card overflow-hidden mb-6">
+   250→   250→        <div className="flex justify-between items-center px-5 py-4">
+   251→   251→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.app_version', lang)}</span>
+   252→   252→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>Mochi Grain {APP_VERSION}</span>
+   253→   253→        </div>
+   254→   254→        <div className="grain-separator" />
+   255→   255→        <div className="flex justify-between items-center px-5 py-4">
+   256→   256→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.engine', lang)}</span>
+   257→   257→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>Mochi Engine v{ENGINE_VERSION}</span>
+   258→   258→        </div>
+   259→   259→        <div className="grain-separator" />
+   260→   260→        <div className="flex justify-between items-center px-5 py-4">
+   261→   261→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.probe_firmware', lang)}</span>
+   262→   262→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>{deviceInfo?.firmware || '—'}</span>
+   263→   263→        </div>
+   264→   264→      </div>
+   265→   265→
+   266→   266→      <div className="text-center pb-4">
+   267→   267→        <p className="text-[10px]" style={{ color: 'var(--gm-text-tertiary)' }}>
+   268→   268→          {t('settings.built_for', lang)}
+   269→   269→        </p>
+   270→   270→      </div>
+   271→   271→
+   272→   272→      {/* ═══ ADVANCED SETTINGS (collapsed) ═══ */}
+   273→   273→      <button
+   274→   274→        className="grain-advanced-toggle mb-4"
+   275→   275→        onClick={() => setAdvancedOpen(prev => !prev)}
+   276→   276→      >
+   277→   277→        <div className="flex items-center gap-3">
+   278→   278→          <SlidersHorizontal size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   279→   279→          <span className="text-sm font-semibold" style={{ color: 'var(--gm-text-primary)' }}>
+   280→   280→            {t('settings.advanced', lang)}
+   281→   281→          </span>
+   282→   282→        </div>
+   283→   283→        <CaretDown
+   284→   284→          size={18}
+   285→   285→          weight="bold"
+   286→   286→          className={`grain-chevron ${advancedOpen ? 'rotated' : ''}`}
+   287→   287→          style={{ color: 'var(--gm-text-tertiary)' }}
+   288→   288→        />
+   289→   289→      </button>
+   290→   290→
+   291→   291→      <div className={`grain-advanced-content ${advancedOpen ? 'expanded' : 'collapsed'}`}>
+   292→   292→        {advancedOpen && <AdvancedSettingsContent />}
+   293→   293→      </div>
+   294→   294→    </div>
+   295→   295→  );
+   296→   296→}
+   297→   297→
+   298→   298→function AdvancedSettingsContent() {
+   299→   299→  const {
+   300→   300→    settings, updateSettings,
+   301→   301→    disconnectProbe, sendProbeCommand,
+   302→   302→    syncProbeHistory, clearHistory,
+   303→   303→    hasDevice, showToast,
+   304→   304→    historyEntries,
+   305→   305→    loadHistory, loadSettings,
+   306→   306→  } = useGrainStore();
+   307→   307→
+   308→   308→  const lang = settings.language as AppLanguage;
+   309→   309→  const hasConnection = hasDevice;
+   310→   310→  const fileInputRef = useRef<HTMLInputElement | null>(null);
+   311→   311→  const importModeRef = useRef<'merge' | 'replace'>('merge');
+   312→   312→  const [confirmReplace, setConfirmReplace] = useState(false);
+   313→   313→  const overlayRef = useRef<HTMLDivElement | null>(null);
+   314→   314→  const lastFocusRef = useRef<HTMLElement | null>(null);
+   315→   315→
+   316→   316→  /* Focus trap + focus restore for the destructive confirmation modal.
+   317→   317→     Tab/Shift+Tab cycle inside the dialog; Escape closes (capture-phase,
+   318→   318→     works even when focus sits on body); on close, focus returns to the
+   319→   319→     element that opened the dialog (captured in the click handler — by the
+   320→   320→     time the open-effect runs, React has already applied autoFocus to the
+   321→   321→     Cancel button, so the effect would otherwise capture the dialog itself). */
+   322→   322→  const openReplaceModal = () => {
+   323→   323→    lastFocusRef.current = document.activeElement as HTMLElement | null;
+   324→   324→    setConfirmReplace(true);
+   325→   325→  };
+   326→   326→
+   327→   327→  useEffect(() => {
+   328→   328→    if (!confirmReplace) return;
+   329→   329→    const onKey = (e: KeyboardEvent) => {
+   330→   330→      if (e.key === 'Escape') {
+   331→   331→        e.stopPropagation();
+   332→   332→        setConfirmReplace(false);
+   333→   333→        return;
+   334→   334→      }
+   335→   335→      if (e.key !== 'Tab') return;
+   336→   336→      const overlay = overlayRef.current;
+   337→   337→      if (!overlay) return;
+   338→   338→      const focusables = Array.from(
+   339→   339→        overlay.querySelectorAll<HTMLElement>(
+   340→   340→          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+   341→   341→        ),
+   342→   342→      ).filter((el) => !el.hasAttribute('disabled'));
+   343→   343→      if (focusables.length === 0) return;
+   344→   344→      const first = focusables[0];
+   345→   345→      const last = focusables[focusables.length - 1];
+   346→   346→      const active = document.activeElement;
+   347→   347→      if (e.shiftKey && (active === first || !overlay.contains(active))) {
+   348→   348→        e.preventDefault();
+   349→   349→        last.focus();
+   350→   350→      } else if (!e.shiftKey && (active === last || !overlay.contains(active))) {
+   351→   351→        e.preventDefault();
+   352→   352→        first.focus();
+   353→   353→      }
+   354→   354→    };
+   355→   355→    document.addEventListener('keydown', onKey, true);
+   356→   356→    return () => {
+   357→   357→      document.removeEventListener('keydown', onKey, true);
+   358→   358→      lastFocusRef.current?.focus?.();
+   359→   359→    };
+   360→   360→  }, [confirmReplace]);
+   361→   361→
+   362→   362→  /* Android Back closes this confirmation first — it must NOT also trigger
+   363→   363→   * the parent Settings tab's back handler (handled=true stops the policy). */
+   364→   364→  useEffect(() => {
+   365→   365→    if (!confirmReplace) return;
+   366→   366→    return registerBackConsumer({
+   367→   367→      id: 'settings-replace-modal',
+   368→   368→      priority: 30,
+   369→   369→      onClose: () => {
+   370→   370→        setConfirmReplace(false);
+   371→   371→        return true;
+   372→   372→      },
+   373→   373→    });
+   374→   374→  }, [confirmReplace]);
+   375→   375→
+   376→   376→  const openImportPicker = (mode: 'merge' | 'replace') => {
+   377→   377→    importModeRef.current = mode;
+   378→   378→    fileInputRef.current?.click();
+   379→   379→  };
+   380→   380→
+   381→   381→  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   382→   382→    const file = e.target.files?.[0];
+   383→   383→    e.target.value = ''; // allow re-selecting the same file
+   384→   384→    if (!file) return;
+   385→   385→    const mode = importModeRef.current;
+   386→   386→    try {
+   387→   387→      const text = await file.text();
+   388→   388→      const result = await importBackupJSON(text, mode);
+   389→   389→      // Refresh the live store from the restored database
+   390→   390→      await loadHistory();
+   391→   391→      await loadSettings();
+   392→   392→      showToast(`${t(mode === 'replace' ? 'toast.backup_replaced' : 'toast.backup_imported', lang)} · ${result.history}`);
+   393→   393→    } catch (err) {
+   394→   394→      showToast(err instanceof Error && err.message === 'invalid'
+   395→   395→        ? t('toast.import_invalid', lang)
+   396→   396→        : t('toast.import_failed', lang));
+   397→   397→    }
+   398→   398→  };
+   399→   399→
+   400→   400→  return (
+   401→   401→    <>
+   402→   402→      {/* ─── Moisture Thresholds (advanced) ─── */}
+   403→   403→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
+   404→   404→        {t('settings.moisture_thresholds', lang)}
+   405→   405→      </p>
+   406→   406→      <ThresholdsCard lang={lang} keys={MOISTURE_KEYS} />
+   407→   407→
+   408→   408→      {/* ─── Temperature Thresholds (advanced, separate from moisture) ─── */}
+   409→   409→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
+   410→   410→        {t('settings.temp_thresholds', lang)}
+   411→   411→      </p>
+   412→   412→      <ThresholdsCard lang={lang} keys={TEMPERATURE_KEYS} />
+   413→   413→
+   414→   414→      {/* ─── Glass Intensity (advanced) ─── */}
+   415→   415→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
+   416→   416→        {t('settings.glass', lang)}
+   417→   417→      </p>
+   418→   418→      <GlassIntensityCard lang={lang} />
+   419→   419→
+   420→   420→      {/* ─── Accent Color ─── */}
+   421→   421→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
+   422→   422→        {t('accent.title', lang)}
+   423→   423→      </p>
+   424→   424→      <div className="grain-card p-4 mb-6">
+   425→   425→        <div className="flex items-center justify-between">
+   426→   426→          <div className="flex items-center gap-3">
+   427→   427→            <div
+   428→   428→              className="w-9 h-9 rounded-xl flex items-center justify-center"
+   429→   429→              style={{ background: 'var(--gm-accent-dim)' }}
+   430→   430→            >
+   431→   431→              <Palette size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   432→   432→            </div>
+   433→   433→            <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+   434→   434→              {t('accent.title', lang)}
+   435→   435→            </span>
+   436→   436→          </div>
+   437→   437→        </div>
+   438→   438→        <div className="flex justify-between mt-4 px-1">
+   439→   439→          {ACCENT_COLORS.map((a) => (
+   440→   440→            <div key={a.value} className="flex flex-col items-center gap-1.5">
+   441→   441→              <button
+   442→   442→                onClick={() => updateSettings({ accentColor: a.value })}
+   443→   443→                className={`grain-accent-dot ${settings.accentColor === a.value ? 'selected' : ''}`}
+   444→   444→                style={{ background: a.color }}
+   445→   445→                aria-label={t(a.labelKey, lang)}
+   446→   446→              />
+   447→   447→              <span className="text-[9px] font-medium" style={{ color: settings.accentColor === a.value ? 'var(--gm-accent)' : 'var(--gm-text-tertiary)' }}>
+   448→   448→                {t(a.labelKey, lang)}
+   449→   449→              </span>
+   450→   450→            </div>
+   451→   451→          ))}
+   452→   452→        </div>
+   453→   453→      </div>
+   454→   454→
+   455→   455→      {/* ─── Probe Controls ─── */}
+   456→   456→      {hasConnection && (
+   457→   457→        <>
+   458→   458→          <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   459→   459→            {t('settings.probe_controls', lang)}
+   460→   460→          </p>
+   461→   461→          <div className="grain-card overflow-hidden mb-6">
+   462→   462→            <button
+   463→   463→              onClick={syncProbeHistory}
+   464→   464→              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+   465→   465→              style={{ color: 'var(--gm-text-primary)' }}
+   466→   466→            >
+   467→   467→              <div className="flex items-center gap-3">
+   468→   468→                <ArrowClockwise size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   469→   469→                <span className="text-sm font-medium">{t('settings.sync_history', lang)}</span>
+   470→   470→              </div>
+   471→   471→              <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.sync_history_desc', lang)}</span>
+   472→   472→            </button>
+   473→   473→            <div className="grain-separator" />
+   474→   474→            <button
+   475→   475→              onClick={() => sendProbeCommand('wake')}
+   476→   476→              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+   477→   477→              style={{ color: 'var(--gm-text-primary)' }}
+   478→   478→            >
+   479→   479→              <div className="flex items-center gap-3">
+   480→   480→                <Wrench size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   481→   481→                <span className="text-sm font-medium">{t('settings.wake_probe', lang)}</span>
+   482→   482→              </div>
+   483→   483→              <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.wake_probe_desc', lang)}</span>
+   484→   484→            </button>
+   485→   485→          </div>
+   486→   486→        </>
+   487→   487→      )}
+   488→   488→
+   489→   489→      {/* ─── Export / Data ─── */}
+   490→   490→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   491→   491→        {t('settings.data', lang)}
+   492→   492→      </p>
+   493→   493→      <div className="grain-card overflow-hidden mb-8">
+   494→   494→        {/* Decision columns toggle — controls BOTH CSV entry points
+   495→   495→            (this row + the History header export) via settings.exportDecisions */}
+   496→   496→        <div className="flex justify-between items-center gap-4 px-5 py-4">
+   497→   497→          <div className="flex items-center gap-3 min-w-0">
+   498→   498→            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gm-accent-dim)' }}>
+   499→   499→              <FileCsv size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   500→   500→            </div>
+   501→   501→            <div className="min-w-0">
+   502→   502→              <p className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.export_decisions', lang)}</p>
+   503→   503→              <p className="text-[10px] leading-snug mt-0.5" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.export_decisions_desc', lang)}</p>
+   504→   504→            </div>
+   505→   505→          </div>
+   506→   506→          <input
+   507→   507→            type="checkbox"
+   508→   508→            checked={settings.exportDecisions}
+   509→   509→            onChange={(e) => { updateSettings({ exportDecisions: e.target.checked }); haptic(e.target.checked, 10); }}
+   510→   510→            className="grain-toggle shrink-0"
+   511→   511→            aria-label={t('settings.export_decisions', lang)}
+   512→   512→          />
+   513→   513→        </div>
+   514→   514→        <div className="grain-separator" />
+   515→   515→        <button
+   516→   516→          onClick={async () => {
+   517→   517→            if (historyEntries.length === 0) {
+   518→   518→              showToast(t('toast.nothing_to_export', lang));
+   519→   519→              return;
+   520→   520→            }
+   521→   521→            haptic(settings.hapticsEnabled, 8);
+   522→   522→            try {
+   523→   523→              /* Client-side builder — the readings live in this browser's
+   524→   524→               * IndexedDB; a server route can never read them (the old
+   525→   525→               * /api/export endpoint always failed with 500). */
+   526→   526→              const csv = buildReadingsCsv(historyEntries, lang, settings.exportDecisions);
+   527→   527→              const filename = `mochi-grain-readings-${format(Date.now(), 'yyyy-MM-dd')}.csv`;
+   528→   528→              const outcome = await deliverCsv(csv, filename);
+   529→   529→              if (outcome !== 'cancelled') showToast(tp('toast.exported', lang, { n: historyEntries.length }));
+   530→   530→            } catch {
+   531→   531→              showToast(t('toast.export_failed', lang));
+   532→   532→            }
+   533→   533→          }}
+   534→   534→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   535→   535→          style={{ color: 'var(--gm-text-primary)' }}
+   536→   536→        >
+   537→   537→          <div className="flex items-center gap-3">
+   538→   538→            <DownloadSimple size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   539→   539→            <span className="text-sm font-medium">{t('settings.export_csv', lang)}</span>
+   540→   540→          </div>
+   541→   541→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.download', lang)}</span>
+   542→   542→        </button>
+   543→   543→        <div className="grain-separator" />
+   544→   544→        <button
+   545→   545→          onClick={async () => {
+   546→   546→            try {
+   547→   547→              const json = await exportBackupJSON();
+   548→   548→              const blob = new Blob([json], { type: 'application/json' });
+   549→   549→              const url = URL.createObjectURL(blob);
+   550→   550→              const a = document.createElement('a'); a.href = url;
+   551→   551→              a.download = `grain-backup-${new Date().toISOString().split('T')[0]}.json`;
+   552→   552→              a.click(); URL.revokeObjectURL(url);
+   553→   553→              showToast(t('toast.backup_exported', lang));
+   554→   554→            } catch { showToast(t('toast.export_failed', lang)); }
+   555→   555→          }}
+   556→   556→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   557→   557→          style={{ color: 'var(--gm-text-primary)' }}
+   558→   558→        >
+   559→   559→          <div className="flex items-center gap-3">
+   560→   560→            <Archive size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   561→   561→            <span className="text-sm font-medium">{t('settings.export_backup', lang)}</span>
+   562→   562→          </div>
+   563→   563→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.full_data', lang)}</span>
+   564→   564→        </button>
+   565→   565→        <div className="grain-separator" />
+   566→   566→        <button
+   567→   567→          onClick={() => openImportPicker('merge')}
+   568→   568→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   569→   569→          style={{ color: 'var(--gm-text-primary)' }}
+   570→   570→        >
+   571→   571→          <div className="flex items-center gap-3">
+   572→   572→            <UploadSimple size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   573→   573→            <span className="text-sm font-medium">{t('settings.import_backup', lang)}</span>
+   574→   574→          </div>
+   575→   575→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.full_data', lang)}</span>
+   576→   576→        </button>
+   577→   577→        <div className="grain-separator" />
+   578→   578→        <button
+   579→   579→          onClick={openReplaceModal}
+   580→   580→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   581→   581→          style={{ color: '#EF4444' }}
+   582→   582→        >
+   583→   583→          <div className="flex items-center gap-3">
+   584→   584→            <ArrowsClockwise size={18} weight="bold" style={{ color: '#EF4444' }} />
+   585→   585→            <span className="text-sm font-medium">{t('settings.replace_data', lang)}</span>
+   586→   586→          </div>
+   587→   587→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.replace_desc', lang)}</span>
+   588→   588→        </button>
+   589→   589→        <input
+   590→   590→          ref={fileInputRef}
+   591→   591→          type="file"
+   592→   592→          accept="application/json,.json"
+   593→   593→          className="hidden"
+   594→   594→          onChange={handleImportFile}
+   595→   595→          aria-hidden="true"
+   596→   596→          tabIndex={-1}
+   597→   597→        />
+   598→   598→
+   599→   599→        {/* Replace-all confirmation modal (glass, app-token themed)
+   600→   600→            Portaled into .grain-app: CSS vars are scoped there, and it has no
+   601→   601→            transform/filter, so position:fixed still tracks the viewport. */}
+   602→   602→        {confirmReplace && typeof document !== 'undefined' && createPortal(
+   603→   603→          <div
+   604→   604→            ref={overlayRef}
+   605→   605→            className="grain-modal-overlay"
+   606→   606→            role="dialog"
+   607→   607→            aria-modal="true"
+   608→   608→            aria-labelledby="grain-replace-title"
+   609→   609→            onClick={(e) => { if (e.target === e.currentTarget) setConfirmReplace(false); }}
+   610→   610→            onKeyDown={(e) => { if (e.key === 'Escape') setConfirmReplace(false); }}
+   611→   611→          >
+   612→   612→            <div className="grain-modal-card">
+   613→   613→              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+   614→   614→                <Warning size={20} weight="fill" style={{ color: '#EF4444' }} />
+   615→   615→              </div>
+   616→   616→              <h3 id="grain-replace-title" className="text-base font-bold tracking-tight mb-1.5" style={{ color: 'var(--gm-text-primary)' }}>
+   617→   617→                {t('settings.replace_confirm_title', lang)}
+   618→   618→              </h3>
+   619→   619→              <p className="text-[12px] leading-relaxed mb-5" style={{ color: 'var(--gm-text-secondary)' }}>
+   620→   620→                {t('settings.replace_confirm_desc', lang)}
+   621→   621→              </p>
+   622→   622→              <div className="flex gap-3">
+   623→   623→                <button
+   624→   624→                  autoFocus
+   625→   625→                  onClick={() => setConfirmReplace(false)}
+   626→   626→                  className="flex-1 py-3 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 grain-modal-cancel"
+   627→   627→                >
+   628→   628→                  {t('settings.cancel', lang)}
+   629→   629→                </button>
+   630→   630→                <button
+   631→   631→                  onClick={() => {
+   632→   632→                    setConfirmReplace(false);
+   633→   633→                    openImportPicker('replace');
+   634→   634→                  }}
+   635→   635→                  className="flex-1 py-3 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95"
+   636→   636→                  style={{ background: 'rgba(239, 68, 68, 0.14)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.32)' }}
+   637→   637→                >
+   638→   638→                  {t('settings.replace_confirm_action', lang)}
+   639→   639→                </button>
+   640→   640→              </div>
+   641→   641→            </div>
+   642→   642→          </div>,
+   643→   643→          document.querySelector('.grain-app') ?? document.body,
+   644→   644→        )}
+   645→   645→        <div className="grain-separator" />
+   646→   646→        <button
+   647→   647→          onClick={() => { clearHistory(); showToast(t('toast.history_cleared', lang)); }}
+   648→   648→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   649→   649→          style={{ color: '#EF4444' }}
+   650→   650→        >
+   651→   651→          <div className="flex items-center gap-3">
+   652→   652→            <Trash size={18} weight="bold" style={{ color: '#EF4444' }} />
+   653→   653→            <span className="text-sm font-medium">{t('settings.clear_history', lang)}</span>
+   654→   654→          </div>
+   655→   655→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.local_only', lang)}</span>
+   656→   656→        </button>
+   657→   657→      </div>
+   658→   658→    </>
+   659→   659→  );
+   660→   660→}
+   661→   661→
+   662→   662→/* ═══════════════════════════════════════════════════════════
+   663→   663→   THRESHOLD EDITING (Advanced Settings)
+   664→   664→   Compact SAFE / WARNING / CRITICAL rows: colored label chip,
+   665→   665→   visible numeric value, horizontal slider. Ordering is enforced
+   666→   666→   by sliderBounds() — safe < warn < critical is unproducible.
+   667→   667→   Persisted via the standard updateSettings() flow.
+   668→   668→   ═══════════════════════════════════════════════════════════ */
+   669→   669→
+   670→   670→const THRESHOLD_ROW_META: Record<ThresholdKey, { labelKey: string; colorVar: string; unit: string; prefix: string }> = {
+   671→   671→  safe:         { labelKey: 'settings.safe',         colorVar: 'var(--gm-band-excellent)', unit: '%',  prefix: '<' },
+   672→   672→  warn:         { labelKey: 'settings.warn',         colorVar: 'var(--gm-band-fair)',      unit: '%',  prefix: '>' },
+   673→   673→  critical:     { labelKey: 'settings.critical',     colorVar: 'var(--gm-band-risky)',     unit: '%',  prefix: '>' },
+   674→   674→  tempSafe:     { labelKey: 'settings.safe',         colorVar: 'var(--gm-band-excellent)', unit: '°C', prefix: '<' },
+   675→   675→  tempWarn:     { labelKey: 'settings.warn',         colorVar: 'var(--gm-band-fair)',      unit: '°C', prefix: '>' },
+   676→   676→  tempCritical: { labelKey: 'settings.critical',     colorVar: 'var(--gm-band-risky)',     unit: '°C', prefix: '>' },
+   677→   677→};
+   678→   678→
+   679→   679→function ThresholdsCard({ lang, keys }: { lang: AppLanguage; keys: ThresholdKey[] }) {
+   680→   680→  const { settings, updateSettings, showToast } = useGrainStore();
+   681→   681→  const thresholds = settings.thresholds;
+   682→   682→
+   683→   683→  const update = (key: ThresholdKey, value: number) => {
+   684→   684→    const next = clampThresholdEdit(thresholds, key, value);
+   685→   685→    if (next === thresholds) return; // clamped to the same value — no write
+   686→   686→    updateSettings({ thresholds: next });
+   687→   687→  };
+   688→   688→
+   689→   689→  // Re-evaluating Mochi against the new thresholds happens automatically:
+   690→   690→  // grain-store.selectGrainType / handleReading read settings.thresholds on
+   691→   691→  // every evaluation, and selectGrainType re-evaluates the live reading.
+   692→   692→  const commitToast = (key: ThresholdKey) => {
+   693→   693→    showToast(tp('toast.threshold_updated', lang, {
+   694→   694→      v: `${thresholds[key]}${THRESHOLD_ROW_META[key].unit}`,
+   695→   695→    }));
+   696→   696→  };
+   697→   697→
+   698→   698→  return (
+   699→   699→    <div className="grain-card p-4 mb-2">
+   700→   700→      <div className="space-y-5">
+   701→   701→        {keys.map((key) => {
+   702→   702→          const meta = THRESHOLD_ROW_META[key];
+   703→   703→          const bounds = sliderBounds(thresholds, key);
+   704→   704→          const value = thresholds[key];
+   705→   705→          return (
+   706→   706→            <div key={key}>
+   707→   707→              <div className="flex justify-between items-baseline mb-1.5">
+   708→   708→                <span
+   709→   709→                  className="text-[10px] font-bold tracking-[0.14em] uppercase"
+   710→   710→                  style={{ color: meta.colorVar }}
+   711→   711→                >
+   712→   712→                  {t(meta.labelKey, lang)}
+   713→   713→                </span>
+   714→   714→                <span className="text-sm font-bold grain-tabular" style={{ color: 'var(--gm-text-primary)' }}>
+   715→   715→                  {meta.prefix} {value.toFixed(1)}{meta.unit}
+   716→   716→                </span>
+   717→   717→              </div>
+   718→   718→              <input
+   719→   719→                type="range"
+   720→   720→                min={bounds.min}
+   721→   721→                max={bounds.max}
+   722→   722→                step={0.5}
+   723→   723→                value={value}
+   724→   724→                onChange={(e) => update(key, parseFloat(e.target.value))}
+   725→   725→                onPointerUp={() => commitToast(key)}
+   726→   726→                onKeyUp={() => commitToast(key)}
+   727→   727→                className="w-full grain-range h-1.5"
+   728→   728→                aria-label={t(meta.labelKey, lang)}
+   729→   729→                aria-valuetext={`${value.toFixed(1)}${meta.unit}`}
+   730→   730→              />
+   731→   731→            </div>
+   732→   732→          );
+   733→   733→        })}
+   734→   734→      </div>
+   735→   735→      <p className="text-[10px] leading-relaxed mt-4 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
+   736→   736→        {t('settings.thresholds_desc', lang)}
+   737→   737→      </p>
+   738→   738→    </div>
+   739→   739→  );
+   740→   740→}
+   741→   741→
+   742→   742→/* ═══════════════════════════════════════════════════════════
+   743→   743→   GLASS INTENSITY (Advanced Settings)
+   744→   744→   Drives computeGlassVars() live via settings.glassOpacity.
+   745→   745→   30% = subtle frosting · 100% = pronounced liquid glass.
+   746→   746→   Persists through updateSettings — survives reloads, theme
+   747→   747→   switches and (via IndexedDB) app restarts.
+   748→   748→   ═══════════════════════════════════════════════════════════ */
+   749→   749→
+   750→   750→function GlassIntensityCard({ lang }: { lang: AppLanguage }) {
+   751→   751→  const { settings, updateSettings } = useGrainStore();
+   752→   752→  const pct = Math.round(clampGlass(settings.glassOpacity) * 100);
+   753→   753→  const minPct = Math.round(GLASS_MIN * 100);
+   754→   754→  const maxPct = Math.round(GLASS_MAX * 100);
+   755→   755→
+   756→   756→  return (
+   757→   757→    <div className="grain-card p-4 mb-6">
+   758→   758→      <div className="flex justify-between items-baseline mb-1.5">
+   759→   759→        <label
+   760→   760→          htmlFor="glass-intensity-range"
+   761→   761→          className="text-[10px] font-bold tracking-[0.14em] uppercase"
+   762→   762→          style={{ color: 'var(--gm-text-secondary)' }}
+   763→   763→        >
+   764→   764→          {t('settings.glass', lang)}
+   765→   765→        </label>
+   766→   766→        <output
+   767→   767→          htmlFor="glass-intensity-range"
+   768→   768→          className="text-sm font-bold grain-tabular"
+   769→   769→          style={{ color: 'var(--gm-accent)' }}
+   770→   770→        >
+   771→   771→          {pct}%
+   772→   772→        </output>
+   773→   773→      </div>
+   774→   774→      <input
+   775→   775→        id="glass-intensity-range"
+   776→   776→        type="range"
+   777→   777→        min={minPct}
+   778→   778→        max={maxPct}
+   779→   779→        step={5}
+   780→   780→        value={pct}
+   781→   781→        onChange={(e) => updateSettings({ glassOpacity: parseInt(e.target.value, 10) / 100 })}
+   782→   782→        className="w-full grain-range h-1.5"
+   783→   783→        aria-label={t('settings.glass', lang)}
+   784→   784→        aria-valuemin={minPct}
+   785→   785→        aria-valuemax={maxPct}
+   786→   786→        aria-valuenow={pct}
+   787→   787→        aria-valuetext={`${pct}%`}
+   788→   788→      />
+   789→   789→      <p className="text-[10px] leading-relaxed mt-3 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
+   790→   790→        {t('settings.glass_desc', lang)}
+   791→   791→      </p>
+   792→   792→    </div>
+   793→   793→  );
+   794→   794→}
+   795→   795→

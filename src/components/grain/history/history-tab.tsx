@@ -11,6 +11,7 @@ import { computeStorageScore, scoreBandColor, type ScoreBand } from '@/lib/stora
 import { haptic } from '@/lib/haptics';
 import { buildReadingsCsv, deliverCsv } from '@/lib/csv-export';
 import { registerBackConsumer } from '@/lib/back-nav';
+import { DeleteButton, ConfirmDialog } from '@/components/grain/delete-button';
 import { HistoryTrends } from './trends-chart';
 import { DetailSparkline } from './detail-sparkline';
 import { format } from 'date-fns';
@@ -297,6 +298,7 @@ function AnalyticsSection({ entries }: { entries: HistoryEntry[] }) {
   const { settings, clearHistory, showToast } = useGrainStore();
   const lang = settings.language as AppLanguage;
   const [open, setOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   return (
     <div className="mb-4">
@@ -323,17 +325,35 @@ function AnalyticsSection({ entries }: { entries: HistoryEntry[] }) {
         <div className="grain-fade-in">
           <HistoryStats entries={entries} />
           {entries.length >= 3 && <StorageScoreCard entries={entries} />}
-          <button
-            onClick={() => { clearHistory(); showToast(t('toast.history_cleared', lang)); }}
-            className="w-full flex justify-between items-center px-5 py-3.5 text-left grain-card"
-            style={{ color: '#EF4444' }}
-          >
-            <div className="flex items-center gap-3">
-              <Trash size={16} weight="bold" />
-              <span className="text-xs font-semibold">{t('settings.clear_history', lang)}</span>
+          {/* Clear history — animated delete control. Clicking NEVER deletes:
+              it opens the shared confirmation dialog first; only an explicit
+              confirm removes records. Free space sits to the LEFT of the
+              control so the hover expansion shifts nothing. */}
+          <div className="w-full flex justify-between items-center gap-3 py-2 pl-5 pr-3 grain-card">
+            <div className="flex items-center gap-3 min-w-0">
+              <Trash size={16} weight="bold" style={{ color: '#EF4444', flexShrink: 0 }} />
+              <span className="text-xs font-semibold" style={{ color: '#EF4444' }}>{t('settings.clear_history', lang)}</span>
             </div>
-            <span className="text-[10px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.local_only', lang)}</span>
-          </button>
+            <DeleteButton
+              ariaLabel={t('settings.clear_history', lang)}
+              revealText={t('settings.delete', lang)}
+              onActivate={() => setConfirmClear(true)}
+              hapticsEnabled={settings.hapticsEnabled}
+            />
+          </div>
+          <ConfirmDialog
+            open={confirmClear}
+            onOpenChange={setConfirmClear}
+            title={t('settings.clear_confirm_title', lang)}
+            description={tp('settings.clear_confirm_desc', lang, { n: entries.length })}
+            confirmLabel={t('settings.clear_confirm_action', lang)}
+            cancelLabel={t('settings.cancel', lang)}
+            hapticsEnabled={settings.hapticsEnabled}
+            onConfirm={async () => {
+              await clearHistory();
+              showToast(t('toast.history_cleared', lang));
+            }}
+          />
         </div>
       )}
     </div>

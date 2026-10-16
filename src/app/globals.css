@@ -2198,3 +2198,365 @@
   border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
 }
 .grain-discover-offline svg { flex-shrink: 0; color: #f59e0b; }
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT LOADING SCREEN — three-body kinetic mark (v2.0 refinement)
+   Neutral chrome background (theme-color pair), never accent.
+   ═══════════════════════════════════════════════════════════════ */
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #f5f5f7;
+}
+.boot-screen-brand {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  text-indent: 0.34em; /* optically recenters tracked uppercase */
+  color: #71717a;
+}
+@media (prefers-color-scheme: dark) {
+  .boot-screen { background: #09090b; }
+  .boot-screen-brand { color: #8a8a93; }
+}
+
+/* ── Three-body loader (user-supplied reference, tokenized) ── */
+.mochi-three-body {
+  --uib-size: 35px;
+  --uib-speed: 0.8s;
+  --uib-color: #5D3FD3;
+  position: relative;
+  display: inline-block;
+  height: var(--uib-size);
+  width: var(--uib-size);
+  animation: mochi-spin-3b calc(var(--uib-speed) * 2.5) infinite linear;
+}
+.mochi-three-body__dot {
+  position: absolute;
+  height: 100%;
+  width: 30%;
+}
+.mochi-three-body__dot::after {
+  content: '';
+  position: absolute;
+  height: 0%;
+  width: 100%;
+  padding-bottom: 100%;
+  background-color: var(--uib-color);
+  border-radius: 50%;
+}
+.mochi-three-body__dot:nth-child(1) {
+  bottom: 5%;
+  left: 0;
+  transform: rotate(60deg);
+  transform-origin: 50% 85%;
+}
+.mochi-three-body__dot:nth-child(1)::after {
+  bottom: 0;
+  left: 0;
+  animation: mochi-wobble1 var(--uib-speed) infinite ease-in-out;
+  animation-delay: calc(var(--uib-speed) * -0.3);
+}
+.mochi-three-body__dot:nth-child(2) {
+  bottom: 5%;
+  right: 0;
+  transform: rotate(-60deg);
+  transform-origin: 50% 85%;
+}
+.mochi-three-body__dot:nth-child(2)::after {
+  bottom: 0;
+  left: 0;
+  animation: mochi-wobble1 var(--uib-speed) infinite calc(var(--uib-speed) * -0.15) ease-in-out;
+}
+.mochi-three-body__dot:nth-child(3) {
+  bottom: -5%;
+  left: 0;
+  transform: translateX(116.666%);
+}
+.mochi-three-body__dot:nth-child(3)::after {
+  top: 0;
+  left: 0;
+  animation: mochi-wobble2 var(--uib-speed) infinite ease-in-out;
+}
+@keyframes mochi-spin-3b {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes mochi-wobble1 {
+  0%, 100% { transform: translateY(0%) scale(1); opacity: 1; }
+  50% { transform: translateY(-66%) scale(0.65); opacity: 0.8; }
+}
+@keyframes mochi-wobble2 {
+  0%, 100% { transform: translateY(0%) scale(1); opacity: 1; }
+  50% { transform: translateY(66%) scale(0.65); opacity: 0.8; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRECISION SLIDER — slim instrument track, tactile thumb,
+   drag value bubble. The native <input> is stretched invisibly
+   over the whole control (opacity 0) so drag / tap-to-jump /
+   keyboard / screen-reader behavior is the browser's own.
+   ═══════════════════════════════════════════════════════════════ */
+.grain-pslider {
+  position: relative;
+  height: 38px;
+  display: flex;
+  align-items: center;
+}
+.grain-pslider input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y; /* horizontal drag = slider, vertical swipe still scrolls */
+  z-index: 2;
+}
+.grain-pslider.disabled input { cursor: not-allowed; }
+.grain-pslider-vis {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.grain-pslider-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gm-toggle-bg);
+  border: 1px solid var(--gm-separator, rgba(128, 128, 128, 0.14));
+}
+.grain-pslider-fill {
+  position: absolute;
+  left: 0;
+  bottom: 10px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--gm-accent);
+  opacity: 0.9;
+  box-shadow: 0 0 8px rgba(var(--gm-accent-rgb), 0.28);
+}
+.grain-pslider-thumb {
+  position: absolute;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: var(--gm-accent);
+  border: 2.5px solid var(--gm-surface-solid);
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  transition: box-shadow 0.15s ease;
+}
+/* Soft halo while dragging (no positional transition — zero lag) */
+.grain-pslider.dragging .grain-pslider-thumb {
+  box-shadow: 0 2px 9px rgba(0, 0, 0, 0.35),
+    0 0 0 5px rgba(var(--gm-accent-rgb), 0.16),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+/* Keyboard focus ring (sibling selector: input precedes .vis) */
+.grain-pslider input:focus-visible ~ .grain-pslider-vis .grain-pslider-thumb {
+  box-shadow: 0 0 0 2px var(--gm-surface-solid),
+    0 0 0 4px rgba(var(--gm-accent-rgb), 0.55),
+    0 1.5px 5px rgba(0, 0, 0, 0.3);
+}
+.grain-pslider-bubble {
+  position: absolute;
+  top: -1px;
+  transform: translateX(-50%);
+  background: var(--gm-surface-solid);
+  border: 1px solid var(--gm-glass-border);
+  color: var(--gm-accent);
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.grain-pslider.dragging .grain-pslider-bubble { opacity: 1; }
+.grain-pslider.disabled .grain-pslider-vis { opacity: 0.4; }
+
+/* ── Threshold rows: severity chip + value ── */
+.grain-th-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.grain-th-chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.9;
+  box-shadow: 0 0 5px currentColor;
+}
+/* Slightly larger segmented control for the threshold panel */
+.grain-seg.grain-seg-lg button {
+  font-size: 10px;
+  padding: 6px 16px;
+  min-height: 28px;
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATED DELETE BUTTON — compact circle → destructive pill
+   Clicking NEVER deletes: it only opens the confirmation dialog.
+   Expansion consumes free space to the LEFT (always last flex
+   child), so adjacent content never shifts. Hover expansion is
+   gated to hover-capable pointers; touch taps open the dialog.
+   ═══════════════════════════════════════════════════════════════ */
+.grain-del-btn {
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--gm-glass-border);
+  background: var(--gm-toggle-bg);
+  color: var(--gm-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 12px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s, color 0.3s, border-color 0.3s,
+    box-shadow 0.3s, transform 0.15s;
+}
+.grain-del-icon { flex-shrink: 0; }
+.grain-del-text {
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0;
+  overflow: hidden;
+  transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.22s, margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .grain-del-btn:hover,
+  .grain-del-btn:focus-visible {
+    width: 116px;
+    background: rgba(239, 68, 68, 0.92);
+    border-color: rgba(239, 68, 68, 0.9);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.28);
+  }
+  .grain-del-btn:hover .grain-del-text,
+  .grain-del-btn:focus-visible .grain-del-text {
+    max-width: 72px;
+    opacity: 1;
+    margin-left: 7px;
+  }
+  .grain-del-btn:hover .grain-del-icon,
+  .grain-del-btn:focus-visible .grain-del-icon {
+    transform: rotate(-8deg);
+  }
+}
+.grain-del-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--gm-surface-solid), 0 0 0 4px rgba(239, 68, 68, 0.45);
+}
+.grain-del-btn:active { transform: scale(0.94); }
+.grain-del-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME PILL SWITCH — neutral instrument toggle (both themes)
+   Accent never floods the switch or the system chrome.
+   ═══════════════════════════════════════════════════════════════ */
+.grain-theme-pill {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--gm-toggle-border);
+  background: var(--gm-toggle-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.25s, border-color 0.25s;
+}
+.grain-theme-pill-glyph {
+  display: inline-flex;
+  color: var(--gm-text-tertiary);
+  opacity: 0.75;
+}
+.grain-theme-pill-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #52525b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.25s, color 0.25s;
+}
+.grain-theme-pill.is-dark .grain-theme-pill-thumb {
+  transform: translateX(26px);
+  background: #26262b;
+  color: #e4e4e7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+.grain-theme-pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--gm-surface-solid), 0 0 0 4px rgba(var(--gm-accent-rgb), 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDUCED MOTION — v2.0 refinement additions
+   ═══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .mochi-three-body,
+  .mochi-three-body__dot::after {
+    animation: none !important;
+  }
+  .grain-del-btn,
+  .grain-del-text,
+  .grain-del-icon,
+  .grain-theme-pill,
+  .grain-theme-pill-thumb,
+  .grain-pslider-thumb,
+  .grain-pslider-bubble {
+    transition: none !important;
+  }
+}

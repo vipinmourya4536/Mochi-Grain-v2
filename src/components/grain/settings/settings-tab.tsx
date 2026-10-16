@@ -10,7 +10,9 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { type GrainType, type AccentColor, GRAIN_OPTIONS } from '@/lib/grain-types';
 import { t, tp, tGrain, type AppLanguage } from '@/lib/i18n';
-import { haptic, HAPTIC_SELECT } from '@/lib/haptics';
+import { haptic, HAPTIC_SELECT, HAPTIC_TOGGLE } from '@/lib/haptics';
+import { PrecisionSlider } from '@/components/grain/precision-slider';
+import { DeleteButton, ConfirmDialog } from '@/components/grain/delete-button';
 import { buildReadingsCsv, deliverCsv } from '@/lib/csv-export';
 import { playSafeAlert } from '@/lib/alert-sound';
 import { usePwaInstall } from '@/lib/pwa';
@@ -63,21 +65,18 @@ export function SettingsTab() {
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
         {t('theme.title', lang)}
       </p>
-      <div className="grain-card overflow-hidden mb-6">
-        <button
-          onClick={() => updateSettings({ theme: isDark ? 'light' : 'dark' })}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
-        >
-          <div className="flex items-center gap-3">
+      <div className="grain-card p-4 mb-6">
+        <div className="flex justify-between items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: 'var(--gm-accent-dim)' }}
             >
               {isDark
                 ? <Moon size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
                 : <Sun size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />}
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
                 {isDark ? t('theme.dark', lang) : t('theme.light', lang)}
               </span>
@@ -86,17 +85,15 @@ export function SettingsTab() {
               </p>
             </div>
           </div>
-          <div className="w-11 h-6 rounded-full relative" style={{ background: isDark ? 'var(--gm-toggle-bg)' : 'var(--gm-accent)', border: `1px solid ${isDark ? 'var(--gm-toggle-border)' : 'var(--gm-accent)'}` }}>
-            <div
-              className="w-5 h-5 rounded-full absolute top-0.5 transition-all"
-              style={{
-                left: isDark ? '2px' : '22px',
-                background: isDark ? 'var(--gm-toggle-thumb)' : '#fff',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-              }}
-            />
-          </div>
-        </button>
+          <ThemePillSwitch
+            isDark={isDark}
+            label={`${t('theme.title', lang)} — ${isDark ? t('theme.dark', lang) : t('theme.light', lang)}`}
+            onToggle={() => {
+              haptic(settings.hapticsEnabled, HAPTIC_TOGGLE);
+              updateSettings({ theme: isDark ? 'light' : 'dark' });
+            }}
+          />
+        </div>
       </div>
 
       {/* ─── Device ─── */}
@@ -310,6 +307,7 @@ function AdvancedSettingsContent() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const importModeRef = useRef<'merge' | 'replace'>('merge');
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const lastFocusRef = useRef<HTMLElement | null>(null);
 
@@ -399,19 +397,13 @@ function AdvancedSettingsContent() {
 
   return (
     <>
-      {/* ─── Moisture Thresholds (advanced) ─── */}
+      {/* ─── Thresholds — ONE compact segmented panel (moisture | temperature) ─── */}
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
-        {t('settings.moisture_thresholds', lang)}
+        {t('settings.thresholds', lang)}
       </p>
-      <ThresholdsCard lang={lang} keys={MOISTURE_KEYS} />
+      <ThresholdsPanel lang={lang} />
 
-      {/* ─── Temperature Thresholds (advanced, separate from moisture) ─── */}
-      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
-        {t('settings.temp_thresholds', lang)}
-      </p>
-      <ThresholdsCard lang={lang} keys={TEMPERATURE_KEYS} />
-
-      {/* ─── Glass Intensity (advanced) ─── */}
+      {/* ─── Glass Intensity (advanced, one compact row) ─── */}
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
         {t('settings.glass', lang)}
       </p>
@@ -643,17 +635,41 @@ function AdvancedSettingsContent() {
           document.querySelector('.grain-app') ?? document.body,
         )}
         <div className="grain-separator" />
-        <button
-          onClick={() => { clearHistory(); showToast(t('toast.history_cleared', lang)); }}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
-          style={{ color: '#EF4444' }}
-        >
-          <div className="flex items-center gap-3">
-            <Trash size={18} weight="bold" style={{ color: '#EF4444' }} />
-            <span className="text-sm font-medium">{t('settings.clear_history', lang)}</span>
+        {/* Clear history — animated delete control. Clicking NEVER deletes:
+            it arms the shared confirmation dialog; only an explicit confirm
+            performs the destructive write. The row's free space sits to the
+            LEFT of the control, so the hover expansion shifts nothing. */}
+        <div className="flex justify-between items-center gap-3 py-2.5 pl-5 pr-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Trash size={18} weight="bold" style={{ color: '#EF4444', flexShrink: 0 }} />
+            <div className="min-w-0">
+              <p className="text-sm font-medium m-0" style={{ color: '#EF4444' }}>{t('settings.clear_history', lang)}</p>
+              <p className="text-[10px] mt-0.5 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.local_only', lang)}</p>
+            </div>
           </div>
-          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.local_only', lang)}</span>
-        </button>
+          <DeleteButton
+            ariaLabel={t('settings.clear_history', lang)}
+            revealText={t('settings.delete', lang)}
+            onActivate={() => setConfirmClear(true)}
+            hapticsEnabled={settings.hapticsEnabled}
+          />
+        </div>
+
+        {/* Clear-history confirmation (shared glass dialog; Android Back
+            closes this first, Escape cancels, focus is trapped+restored). */}
+        <ConfirmDialog
+          open={confirmClear}
+          onOpenChange={setConfirmClear}
+          title={t('settings.clear_confirm_title', lang)}
+          description={tp('settings.clear_confirm_desc', lang, { n: historyEntries.length })}
+          confirmLabel={t('settings.clear_confirm_action', lang)}
+          cancelLabel={t('settings.cancel', lang)}
+          hapticsEnabled={settings.hapticsEnabled}
+          onConfirm={async () => {
+            await clearHistory();
+            showToast(t('toast.history_cleared', lang));
+          }}
+        />
       </div>
     </>
   );
@@ -661,10 +677,13 @@ function AdvancedSettingsContent() {
 
 /* ═══════════════════════════════════════════════════════════
    THRESHOLD EDITING (Advanced Settings)
-   Compact SAFE / WARNING / CRITICAL rows: colored label chip,
-   visible numeric value, horizontal slider. Ordering is enforced
-   by sliderBounds() — safe < warn < critical is unproducible.
-   Persisted via the standard updateSettings() flow.
+   ONE compact segmented panel: Moisture | Temperature. Only
+   the selected metric's three rows are mounted — switching
+   segments never touches stored values. Each row: severity
+   chip, live numeric value, PrecisionSlider (ordering enforced
+   by sliderBounds() — safe < warn < critical is unproducible).
+   Persisted via the standard updateSettings() flow; Mochi
+   re-evaluates automatically against the new thresholds.
    ═══════════════════════════════════════════════════════════ */
 
 const THRESHOLD_ROW_META: Record<ThresholdKey, { labelKey: string; colorVar: string; unit: string; prefix: string }> = {
@@ -676,57 +695,94 @@ const THRESHOLD_ROW_META: Record<ThresholdKey, { labelKey: string; colorVar: str
   tempCritical: { labelKey: 'settings.critical',     colorVar: 'var(--gm-band-risky)',     unit: '°C', prefix: '>' },
 };
 
-function ThresholdsCard({ lang, keys }: { lang: AppLanguage; keys: ThresholdKey[] }) {
-  const { settings, updateSettings, showToast } = useGrainStore();
-  const thresholds = settings.thresholds;
+type ThresholdMetric = 'moisture' | 'temperature';
 
+function ThresholdsPanel({ lang }: { lang: AppLanguage }) {
+  const { settings, updateSettings, showToast } = useGrainStore();
+  const [metric, setMetric] = useState<ThresholdMetric>('moisture');
+  const hapticsEnabled = settings.hapticsEnabled;
+
+  /* Read fresh state on every edit — no stale-neighbour clamping
+     even if two change events batch into one render. */
   const update = (key: ThresholdKey, value: number) => {
-    const next = clampThresholdEdit(thresholds, key, value);
-    if (next === thresholds) return; // clamped to the same value — no write
+    const current = useGrainStore.getState().settings.thresholds;
+    const next = clampThresholdEdit(current, key, value);
+    if (next === current) return; // clamped to the same value — no write
     updateSettings({ thresholds: next });
   };
 
   // Re-evaluating Mochi against the new thresholds happens automatically:
-  // grain-store.selectGrainType / handleReading read settings.thresholds on
-  // every evaluation, and selectGrainType re-evaluates the live reading.
-  const commitToast = (key: ThresholdKey) => {
+  // grain-store reads settings.thresholds on every evaluation.
+  const commitToast = (key: ThresholdKey, committed: number) => {
     showToast(tp('toast.threshold_updated', lang, {
-      v: `${thresholds[key]}${THRESHOLD_ROW_META[key].unit}`,
+      v: `${committed.toFixed(1)}${THRESHOLD_ROW_META[key].unit}`,
     }));
   };
 
+  const keys: ThresholdKey[] = metric === 'moisture' ? MOISTURE_KEYS : TEMPERATURE_KEYS;
+
   return (
     <div className="grain-card p-4 mb-2">
-      <div className="space-y-5">
+      {/* Segmented metric selector — switching NEVER alters stored values */}
+      <div
+        className="grain-seg grain-seg-lg mb-4"
+        role="tablist"
+        aria-label={t('settings.thresholds', lang)}
+      >
+        <button
+          role="tab"
+          aria-selected={metric === 'moisture'}
+          className={metric === 'moisture' ? 'active' : ''}
+          onClick={() => {
+            if (metric === 'moisture') return;
+            haptic(hapticsEnabled, HAPTIC_SELECT);
+            setMetric('moisture');
+          }}
+        >
+          {t('history.moisture', lang)}
+        </button>
+        <button
+          role="tab"
+          aria-selected={metric === 'temperature'}
+          className={metric === 'temperature' ? 'active' : ''}
+          onClick={() => {
+            if (metric === 'temperature') return;
+            haptic(hapticsEnabled, HAPTIC_SELECT);
+            setMetric('temperature');
+          }}
+        >
+          {t('history.temperature', lang)}
+        </button>
+      </div>
+
+      <div className="space-y-4">
         {keys.map((key) => {
           const meta = THRESHOLD_ROW_META[key];
+          const thresholds = settings.thresholds;
           const bounds = sliderBounds(thresholds, key);
           const value = thresholds[key];
           return (
-            <div key={key}>
-              <div className="flex justify-between items-baseline mb-1.5">
-                <span
-                  className="text-[10px] font-bold tracking-[0.14em] uppercase"
-                  style={{ color: meta.colorVar }}
-                >
+            <div key={key} className="grain-th-row">
+              <div className="flex justify-between items-center mb-0.5">
+                <span className="grain-th-chip" style={{ color: meta.colorVar }}>
+                  <span className="grain-th-chip-dot" style={{ background: meta.colorVar }} aria-hidden="true" />
                   {t(meta.labelKey, lang)}
                 </span>
                 <span className="text-sm font-bold grain-tabular" style={{ color: 'var(--gm-text-primary)' }}>
                   {meta.prefix} {value.toFixed(1)}{meta.unit}
                 </span>
               </div>
-              <input
-                type="range"
+              <PrecisionSlider
                 min={bounds.min}
                 max={bounds.max}
                 step={0.5}
                 value={value}
-                onChange={(e) => update(key, parseFloat(e.target.value))}
-                onPointerUp={() => commitToast(key)}
-                onKeyUp={() => commitToast(key)}
-                className="w-full grain-range h-1.5"
-                aria-label={t(meta.labelKey, lang)}
-                aria-valuetext={`${value.toFixed(1)}${meta.unit}`}
+                onValueChange={(v) => update(key, v)}
+                onValueCommit={(v) => commitToast(key, v)}
+                ariaLabel={`${t(meta.labelKey, lang)} — ${metric === 'moisture' ? t('history.moisture', lang) : t('history.temperature', lang)}`}
+                format={(v) => `${v.toFixed(1)}${meta.unit}`}
+                hapticsEnabled={hapticsEnabled}
+                colorVar={meta.colorVar}
               />
             </div>
           );
@@ -741,10 +797,11 @@ function ThresholdsCard({ lang, keys }: { lang: AppLanguage; keys: ThresholdKey[
 
 /* ═══════════════════════════════════════════════════════════
    GLASS INTENSITY (Advanced Settings)
-   Drives computeGlassVars() live via settings.glassOpacity.
-   30% = subtle frosting · 100% = pronounced liquid glass.
-   Persists through updateSettings — survives reloads, theme
-   switches and (via IndexedDB) app restarts.
+   One compact glass-control row driving computeGlassVars()
+   live via settings.glassOpacity. 30% = subtle frosting ·
+   100% = pronounced liquid glass. Persists through
+   updateSettings — survives reloads, theme switches and
+   (via IndexedDB) app restarts.
    ═══════════════════════════════════════════════════════════ */
 
 function GlassIntensityCard({ lang }: { lang: AppLanguage }) {
@@ -755,40 +812,76 @@ function GlassIntensityCard({ lang }: { lang: AppLanguage }) {
 
   return (
     <div className="grain-card p-4 mb-6">
-      <div className="flex justify-between items-baseline mb-1.5">
-        <label
-          htmlFor="glass-intensity-range"
+      <div className="flex justify-between items-center mb-0.5">
+        <span
           className="text-[10px] font-bold tracking-[0.14em] uppercase"
           style={{ color: 'var(--gm-text-secondary)' }}
         >
           {t('settings.glass', lang)}
-        </label>
+        </span>
         <output
-          htmlFor="glass-intensity-range"
           className="text-sm font-bold grain-tabular"
           style={{ color: 'var(--gm-accent)' }}
         >
           {pct}%
         </output>
       </div>
-      <input
-        id="glass-intensity-range"
-        type="range"
+      <PrecisionSlider
         min={minPct}
         max={maxPct}
         step={5}
         value={pct}
-        onChange={(e) => updateSettings({ glassOpacity: parseInt(e.target.value, 10) / 100 })}
-        className="w-full grain-range h-1.5"
-        aria-label={t('settings.glass', lang)}
-        aria-valuemin={minPct}
-        aria-valuemax={maxPct}
-        aria-valuenow={pct}
-        aria-valuetext={`${pct}%`}
+        onValueChange={(v) => updateSettings({ glassOpacity: v / 100 })}
+        ariaLabel={t('settings.glass', lang)}
+        format={(v) => `${Math.round(v)}%`}
+        hapticsEnabled={settings.hapticsEnabled}
+        colorVar="var(--gm-accent)"
       />
-      <p className="text-[10px] leading-relaxed mt-3 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
-        {t('settings.glass_desc', lang)}
+      <p className="text-[10px] leading-relaxed mt-2 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
+        {t('settings.glass_hint', lang)}
       </p>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   THEME PILL SWITCH — premium neutral instrument toggle
+   Slender track, precise circular thumb, sun/moon glyphs,
+   restrained 240ms travel. Neutral track + thumb colors in
+   BOTH themes (a tiny accent appears only on the leading icon
+   box, never on the switch itself — the switch and the system
+   chrome must never flood with the accent color).
+   Proper switch semantics: role=switch, aria-checked,
+   keyboard activation, visible focus ring.
+   ═══════════════════════════════════════════════════════════ */
+
+function ThemePillSwitch({
+  isDark,
+  label,
+  onToggle,
+}: {
+  isDark: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isDark}
+      aria-label={label}
+      onClick={onToggle}
+      className={`grain-theme-pill ${isDark ? 'is-dark' : 'is-light'}`}
+    >
+      <span className="grain-theme-pill-glyph glyph-left" aria-hidden="true">
+        <Sun size={10} weight="fill" />
+      </span>
+      <span className="grain-theme-pill-glyph glyph-right" aria-hidden="true">
+        <Moon size={10} weight="fill" />
+      </span>
+      <span className="grain-theme-pill-thumb" aria-hidden="true">
+        {isDark ? <Moon size={11} weight="fill" /> : <Sun size={11} weight="fill" />}
+      </span>
+    </button>
   );
 }
