@@ -3,11 +3,11 @@
    ═══════════════════════════════════════════════════════════════ */
 
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Reading, AppSettings, HistoryEntry, MochiDecision } from './grain-types';
+import type { Reading, AppSettings, HistoryEntry, MochiDecision, DiscoverVideo, GrainType, RiskTheme } from './grain-types';
 import { DEFAULT_SETTINGS } from './grain-types';
 
 const DB_NAME = 'grain-monitor-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** Legacy synthetic-probe id used by the removed demo mode.
  *  Kept ONLY so the v3 upgrade can purge any rows a pre-3 database may
@@ -39,6 +39,25 @@ function getDB() {
         // v2: Saved Discover videos (keyPath = video id string)
         if (oldVersion < 2 && !db.objectStoreNames.contains('bookmarks')) {
           db.createObjectStore('bookmarks', { keyPath: 'id' });
+        }
+        // v4: Discover API cache — one entry per (grainType + conditionStatus)
+        // holding the latest admin-approved videos so Discover works offline.
+        if (!db.objectStoreNames.contains('discover-cache')) {
+          db.createObjectStore('discover-cache', { keyPath: 'cacheKey' });
+        }
+        // v4: purge legacy id-only bookmarks. Pre-API bookmarks stored just
+        // { id, savedAt } against the removed hardcoded library; without an
+        // embedded video record they can never be rendered again. Real
+        // bookmarks written by the admin-API era store the full video and
+        // are preserved.
+        if (oldVersion > 0 && oldVersion < 4) {
+          const bookmarks = transaction.objectStore('bookmarks');
+          let bCursor = await bookmarks.openCursor();
+          while (bCursor) {
+            const rec = bCursor.value as { video?: unknown } | null;
+            if (rec == null || rec.video == null) bCursor.delete();
+            bCursor = await bCursor.continue();
+          }
         }
         // v3: one-time purge of legacy synthetic demo rows. Only rows whose
         // deviceId matches the retired demo probe id are deleted — every
@@ -123,43 +142,93 @@ export async function clearAllHistory(): Promise<void> {
   await db.clear('history');
 }
 
-/* ── Discover video bookmarks ── */
+/* ── Discover video bookmarks (full video records) ──
+   The full DiscoverVideo is embedded in the record so the Saved view
+   renders saved videos even when they are absent from the current
+   condition's API response — and keeps working fully offline. */
 export interface BookmarkRecord {
   id: string;
   savedAt: number;
+  video: DiscoverVideo;
 }
 
 export async function getBookmarkedIds(): Promise<string[]> {
   try {
     const db = await getDB();
-    const rows: { id: string; savedAt: number }[] = await db.getAll('bookmarks');
+    const rows: BookmarkRecord[] = await db.getAll('bookmarks');
     return rows.map((r) => r.id);
   } catch {
     return [];
   }
 }
 
-/** Full bookmark records (id + savedAt) so the Saved view can sort by recency */
+/** Full bookmark records (id + savedAt + video), sorted newest-first */
 export async function getBookmarkedEntries(): Promise<BookmarkRecord[]> {
   try {
     const db = await getDB();
-    const rows: { id: string; savedAt: number }[] = await db.getAll('bookmarks');
-    return rows.map((r) => ({ id: r.id, savedAt: r.savedAt }));
+    const rows: BookmarkRecord[] = await db.getAll('bookmarks');
+    return rows.filter((r) => r && typeof r.id === 'string' && r.video != null)
+      .sort((a, b) => b.savedAt - a.savedAt);
   } catch {
     return [];
   }
 }
 
-/** Toggle a video bookmark; returns the new saved state */
-export async function toggleVideoBookmark(videoId: string): Promise<boolean> {
+/** Toggle a video bookmark (stores the full video record); returns the new saved state */
+export async function toggleVideoBookmark(video: DiscoverVideo): Promise<boolean> {
   const db = await getDB();
-  const existing = await db.get('bookmarks', videoId);
+  const existing = await db.get('bookmarks', video.id);
   if (existing) {
-    await db.delete('bookmarks', videoId);
+    await db.delete('bookmarks', video.id);
     return false;
   }
-  await db.put('bookmarks', { id: videoId, savedAt: Date.now() });
+  await db.put('bookmarks', { id: video.id, savedAt: Date.now(), video });
   return true;
+}
+
+/* ── Discover API cache (offline-first) ──
+   One cache entry per grain condition bucket: `${grainType}:${conditionStatus}`.
+   Written on every successful admin-panel fetch (empty result included — it
+   is the latest truth), read whenever the network is unavailable or fails. */
+export interface DiscoverCacheEntry {
+  cacheKey: string;
+  grainType: GrainType;
+  conditionStatus: RiskTheme;
+  /** Moisture the entry was fetched with (null when telemetry was unknown). */
+  moisture: number | null;
+  videos: DiscoverVideo[];
+  fetchedAt: number; // epoch ms
+}
+
+export function discoverCacheKey(grainType: GrainType, conditionStatus: RiskTheme): string {
+  return `${grainType}:${conditionStatus}`;
+}
+
+export async function cacheDiscoverVideos(entry: DiscoverCacheEntry): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put('discover-cache', entry);
+  } catch {
+    /* cache write failure is non-fatal — the UI still renders the fetch */
+  }
+}
+
+export async function getCachedDiscoverVideos(
+  grainType: GrainType,
+  conditionStatus: RiskTheme,
+): Promise<DiscoverCacheEntry | undefined> {
+  try {
+    const db = await getDB();
+    const entry = await db.get('discover-cache', discoverCacheKey(grainType, conditionStatus));
+    return entry && Array.isArray(entry.videos) ? entry : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function clearDiscoverCache(): Promise<void> {
+  const db = await getDB();
+  await db.clear('discover-cache');
 }
 
 /* ── Settings ── */

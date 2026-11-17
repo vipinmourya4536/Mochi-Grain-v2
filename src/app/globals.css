@@ -2199,6 +2199,25 @@
 }
 .grain-discover-offline svg { flex-shrink: 0; color: #f59e0b; }
 
+/* Background refresh row while a cached Discover list is revalidating */
+.grain-discover-refresh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: var(--gm-text-tertiary);
+}
+.grain-discover-spin {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 2px solid var(--gm-toggle-bg);
+  border-top-color: var(--gm-accent);
+  border-radius: 50%;
+  animation: grain-spin 0.7s linear infinite;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    BOOT LOADING SCREEN — three-body kinetic mark (v2.0 refinement)
    Neutral chrome background (theme-color pair), never accent.
