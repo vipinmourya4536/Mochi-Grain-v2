@@ -23,8 +23,10 @@ import { t, type AppLanguage } from '@/lib/i18n';
  */
 export function ConnectivityRibbon() {
   const { online, quality } = useNetworkStatus();
-  const { settings, showToast } = useGrainStore();
-  const lang = settings.language as AppLanguage;
+  /* Selector-based subscription — this ribbon cares about language + the
+     toast action only; BLE packet churn never re-renders it. */
+  const lang = useGrainStore((s) => s.settings.language) as AppLanguage;
+  const showToast = useGrainStore((s) => s.showToast);
 
   const wasOffline = useRef(false);
 

@@ -1,0 +1,888 @@
+     1→'use client';
+     2→
+     3→import { useState, useRef, useEffect } from 'react';
+     4→import { createPortal } from 'react-dom';
+     5→import { useGrainStore } from '@/lib/grain-store';
+     6→import {
+     7→  Cpu, DownloadSimple, ArrowClockwise, Trash, Power, Wrench,
+     8→  Sun, Moon, CaretDown, SlidersHorizontal, Palette, Check,
+     9→  DeviceMobile, Archive, UploadSimple, ArrowsClockwise, Warning, FileCsv,
+    10→} from '@phosphor-icons/react/dist/ssr';
+    11→import { type GrainType, type AccentColor, GRAIN_OPTIONS } from '@/lib/grain-types';
+    12→import { t, tp, tGrain, type AppLanguage } from '@/lib/i18n';
+    13→import { haptic, HAPTIC_SELECT, HAPTIC_TOGGLE } from '@/lib/haptics';
+    14→import { PrecisionSlider } from '@/components/grain/precision-slider';
+    15→import { DeleteButton, ConfirmDialog } from '@/components/grain/delete-button';
+    16→import { buildReadingsCsv, deliverCsv } from '@/lib/csv-export';
+    17→import { playSafeAlert } from '@/lib/alert-sound';
+    18→import { usePwaInstall } from '@/lib/pwa';
+    19→import { registerBackConsumer } from '@/lib/back-nav';
+    20→import { exportBackupJSON, importBackupJSON } from '@/lib/offline-storage';
+    21→import {
+    22→  sliderBounds, clampThresholdEdit,
+    23→  MOISTURE_KEYS, TEMPERATURE_KEYS,
+    24→  type ThresholdKey,
+    25→} from '@/lib/thresholds';
+    26→import { GLASS_MIN, GLASS_MAX, clampGlass } from '@/lib/glass';
+    27→import { ENGINE_VERSION } from '@/lib/mochi-engine';
+    28→import { format } from 'date-fns';
+    29→
+    30→/** Overall app version — distinct from the engine version (ENGINE_VERSION). */
+    31→const APP_VERSION = '2.0.0';
+    32→
+    33→const ACCENT_COLORS: { value: AccentColor; color: string; labelKey: string }[] = [
+    34→  { value: 'orange', color: '#F97316', labelKey: 'accent.orange' },
+    35→  { value: 'green', color: '#22C55E', labelKey: 'accent.green' },
+    36→  { value: 'purple', color: '#A855F7', labelKey: 'accent.purple' },
+    37→  { value: 'blue', color: '#3B82F6', labelKey: 'accent.blue' },
+    38→  { value: 'teal', color: '#14B8A6', labelKey: 'accent.teal' },
+    39→];
+    40→
+    41→export function SettingsTab() {
+    42→  const {
+    43→    deviceInfo, settings, updateSettings, selectGrainType,
+    44→    disconnectProbe, sendProbeCommand, hasDevice, showToast,
+    45→  } = useGrainStore();
+    46→  const { canInstall, isStandalone, promptInstall } = usePwaInstall();
+    47→
+    48→  const lang = settings.language as AppLanguage;
+    49→  const isDark = settings.theme === 'dark';
+    50→  const [advancedOpen, setAdvancedOpen] = useState(false);
+    51→  const hasConnection = hasDevice;
+    52→
+    53→  return (
+    54→    <div className="pt-2 pb-6 grain-fade-in">
+    55→      <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: 'var(--gm-text-primary)' }}>
+    56→        {t('settings.title', lang)}
+    57→      </h2>
+    58→      <p className="text-sm mb-6" style={{ color: 'var(--gm-text-secondary)' }}>
+    59→        {t('settings.desc', lang)}
+    60→      </p>
+    61→
+    62→      {/* ═══ BASIC SETTINGS ═══ */}
+    63→
+    64→      {/* ─── Theme Toggle ─── */}
+    65→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+    66→        {t('theme.title', lang)}
+    67→      </p>
+    68→      <div className="grain-card p-4 mb-6">
+    69→        <div className="flex justify-between items-center gap-3">
+    70→          <div className="flex items-center gap-3 min-w-0">
+    71→            <div
+    72→              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+    73→              style={{ background: 'var(--gm-accent-dim)' }}
+    74→            >
+    75→              {isDark
+    76→                ? <Moon size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+    77→                : <Sun size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />}
+    78→            </div>
+    79→            <div className="min-w-0">
+    80→              <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+    81→                {isDark ? t('theme.dark', lang) : t('theme.light', lang)}
+    82→              </span>
+    83→              <p className="text-[10px] mt-0.5" style={{ color: 'var(--gm-text-tertiary)' }}>
+    84→                {t('theme.tap_switch', lang)}
+    85→              </p>
+    86→            </div>
+    87→          </div>
+    88→          <ThemePillSwitch
+    89→            isDark={isDark}
+    90→            label={`${t('theme.title', lang)} — ${isDark ? t('theme.dark', lang) : t('theme.light', lang)}`}
+    91→            onToggle={() => {
+    92→              haptic(settings.hapticsEnabled, HAPTIC_TOGGLE);
+    93→              updateSettings({ theme: isDark ? 'light' : 'dark' });
+    94→            }}
+    95→          />
+    96→        </div>
+    97→      </div>
+    98→
+    99→      {/* ─── Device ─── */}
+   100→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   101→        {t('settings.device', lang)}
+   102→      </p>
+   103→      <div className="grain-card p-5 mb-6">
+   104→        <div className="flex items-center gap-4 mb-5">
+   105→          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'var(--gm-toggle-bg)', border: '1px solid var(--gm-toggle-border)' }}>
+   106→            <Cpu size={22} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   107→          </div>
+   108→          <div>
+   109→            <h3 className="font-bold text-sm tracking-tight" style={{ color: 'var(--gm-text-primary)' }}>
+   110→              {deviceInfo?.name || '—'}
+   111→            </h3>
+   112→            <p className="text-[11px] mt-0.5" style={{ color: 'var(--gm-text-secondary)' }}>
+   113→              {deviceInfo ? `${deviceInfo.firmware} · ${deviceInfo.platform}` : t('settings.no_device', lang)}
+   114→            </p>
+   115→          </div>
+   116→        </div>
+   117→        <div className="flex gap-3">
+   118→          <button
+   119→            onClick={async () => {
+   120→              if (!hasConnection) {
+   121→                showToast(t('settings.connect_first', lang));
+   122→                return;
+   123→              }
+   124→              await sendProbeCommand('calibrate');
+   125→            }}
+   126→            disabled={!hasConnection}
+   127→            className="flex-1 font-bold text-xs py-3.5 rounded-xl active:scale-95 transition-all tracking-wide"
+   128→            style={{
+   129→              background: hasConnection ? 'var(--gm-btn-primary-bg)' : 'var(--gm-toggle-bg)',
+   130→              color: hasConnection ? 'var(--gm-btn-primary-text)' : 'var(--gm-text-tertiary)',
+   131→              border: hasConnection ? 'none' : '1px solid var(--gm-toggle-border)',
+   132→              cursor: hasConnection ? 'pointer' : 'not-allowed',
+   133→            }}
+   134→          >
+   135→            {t('settings.calibrate', lang)}
+   136→          </button>
+   137→          {hasConnection ? (
+   138→            <button
+   139→              onClick={disconnectProbe}
+   140→              className="px-4 py-3.5 rounded-xl active:scale-95 transition-all font-bold text-xs"
+   141→              style={{
+   142→                background: 'rgba(239, 68, 68, 0.1)',
+   143→                color: '#EF4444',
+   144→                border: '1px solid rgba(239, 68, 68, 0.2)',
+   145→              }}
+   146→            >
+   147→              <Power size={18} weight="bold" />
+   148→            </button>
+   149→          ) : null}
+   150→        </div>
+   151→      </div>
+   152→
+   153→      {/* ─── Grain Type – the ONLY grain selector in the app ─── */}
+   154→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   155→        {t('settings.grain_type', lang)}
+   156→      </p>
+   157→      <div className="grain-card p-2.5 mb-6">
+   158→        <div className="grid grid-cols-3 gap-2">
+   159→          {GRAIN_OPTIONS.map((g) => {
+   160→            const isActive = settings.grainType === g;
+   161→            return (
+   162→              <button
+   163→                key={g}
+   164→                onClick={() => {
+   165→                  if (g === settings.grainType) return;
+   166→                  haptic(settings.hapticsEnabled, HAPTIC_SELECT);
+   167→                  selectGrainType(g);
+   168→                }}
+   169→                className={`grain-grain-card ${isActive ? 'active' : ''}`}
+   170→                aria-pressed={isActive}
+   171→              >
+   172→                <span className="truncate">{tGrain(g, lang)}</span>
+   173→                {isActive && <Check size={12} weight="bold" style={{ flexShrink: 0 }} />}
+   174→              </button>
+   175→            );
+   176→          })}
+   177→        </div>
+   178→      </div>
+   179→
+   180→      {/* ═══ Threshold sliders live in ADVANCED SETTINGS (see below) —
+   181→             the main view stays focused on daily controls. ═══ */}
+   182→
+   183→      {/* ═══ PREFERENCES ═══ */}
+   184→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   185→        {t('settings.preferences', lang)}
+   186→      </p>
+   187→      <div className="grain-card overflow-hidden mb-6">
+   188→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   189→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.push_alerts', lang)}</span>
+   190→          <input type="checkbox" checked={settings.pushAlerts} onChange={(e) => { updateSettings({ pushAlerts: e.target.checked }); showToast(e.target.checked ? t('toast.alerts_on', lang) : t('toast.alerts_off', lang)); }} className="grain-toggle" />
+   191→        </label>
+   192→        <div className="grain-separator" />
+   193→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   194→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.auto_sync', lang)}</span>
+   195→          <input type="checkbox" checked={settings.autoSync} onChange={(e) => { updateSettings({ autoSync: e.target.checked }); showToast(e.target.checked ? t('toast.autosync_on', lang) : t('toast.autosync_off', lang)); }} className="grain-toggle" />
+   196→        </label>
+   197→        <div className="grain-separator" />
+   198→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   199→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.auto_reconnect', lang)}</span>
+   200→          <input type="checkbox" checked={settings.autoReconnect} onChange={(e) => { updateSettings({ autoReconnect: e.target.checked }); }} className="grain-toggle" />
+   201→        </label>
+   202→        <div className="grain-separator" />
+   203→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   204→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.haptics', lang)}</span>
+   205→          <input type="checkbox" checked={settings.hapticsEnabled} onChange={(e) => { updateSettings({ hapticsEnabled: e.target.checked }); haptic(e.target.checked, 14); }} className="grain-toggle" />
+   206→        </label>
+   207→        <div className="grain-separator" />
+   208→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   209→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.sound', lang)}</span>
+   210→          <input type="checkbox" checked={settings.soundAlerts} onChange={(e) => { updateSettings({ soundAlerts: e.target.checked }); if (e.target.checked) playSafeAlert(true); }} className="grain-toggle" />
+   211→        </label>
+   212→        <div className="grain-separator" />
+   213→        <label className="flex justify-between items-center px-5 py-4 cursor-pointer">
+   214→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.wake_on_connect', lang)}</span>
+   215→          <input type="checkbox" checked={settings.wakeOnConnect} onChange={(e) => { updateSettings({ wakeOnConnect: e.target.checked }); }} className="grain-toggle" />
+   216→        </label>
+   217→      </div>
+   218→
+   219→      {/* ─── Install App (PWA) ─── */}
+   220→      {canInstall && !isStandalone && (
+   221→        <div className="grain-card overflow-hidden mb-6">
+   222→          <button
+   223→            onClick={async () => {
+   224→              const outcome = await promptInstall();
+   225→              if (outcome === 'accepted') showToast(t('toast.install_ok', lang));
+   226→              else if (outcome === 'dismissed') showToast(t('toast.install_dismissed', lang));
+   227→            }}
+   228→            className="w-full flex justify-between items-center px-5 py-4 text-left"
+   229→            style={{ color: 'var(--gm-text-primary)' }}
+   230→          >
+   231→            <div className="flex items-center gap-3">
+   232→              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--gm-accent-dim)' }}>
+   233→                <DeviceMobile size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   234→              </div>
+   235→              <span className="text-sm font-medium">{t('settings.install_app', lang)}</span>
+   236→            </div>
+   237→            <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.install_desc', lang)}</span>
+   238→          </button>
+   239→        </div>
+   240→      )}
+   241→
+   242→      {/* ═══ ABOUT ═══ */}
+   243→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   244→        {t('settings.about', lang)}
+   245→      </p>
+   246→      <div className="grain-card overflow-hidden mb-6">
+   247→        <div className="flex justify-between items-center px-5 py-4">
+   248→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.app_version', lang)}</span>
+   249→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>Mochi Grain {APP_VERSION}</span>
+   250→        </div>
+   251→        <div className="grain-separator" />
+   252→        <div className="flex justify-between items-center px-5 py-4">
+   253→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.engine', lang)}</span>
+   254→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>Mochi Engine v{ENGINE_VERSION}</span>
+   255→        </div>
+   256→        <div className="grain-separator" />
+   257→        <div className="flex justify-between items-center px-5 py-4">
+   258→          <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.probe_firmware', lang)}</span>
+   259→          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>{deviceInfo?.firmware || '—'}</span>
+   260→        </div>
+   261→      </div>
+   262→
+   263→      <div className="text-center pb-4">
+   264→        <p className="text-[10px]" style={{ color: 'var(--gm-text-tertiary)' }}>
+   265→          {t('settings.built_for', lang)}
+   266→        </p>
+   267→      </div>
+   268→
+   269→      {/* ═══ ADVANCED SETTINGS (collapsed) ═══ */}
+   270→      <button
+   271→        className="grain-advanced-toggle mb-4"
+   272→        onClick={() => setAdvancedOpen(prev => !prev)}
+   273→      >
+   274→        <div className="flex items-center gap-3">
+   275→          <SlidersHorizontal size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   276→          <span className="text-sm font-semibold" style={{ color: 'var(--gm-text-primary)' }}>
+   277→            {t('settings.advanced', lang)}
+   278→          </span>
+   279→        </div>
+   280→        <CaretDown
+   281→          size={18}
+   282→          weight="bold"
+   283→          className={`grain-chevron ${advancedOpen ? 'rotated' : ''}`}
+   284→          style={{ color: 'var(--gm-text-tertiary)' }}
+   285→        />
+   286→      </button>
+   287→
+   288→      <div className={`grain-advanced-content ${advancedOpen ? 'expanded' : 'collapsed'}`}>
+   289→        {advancedOpen && <AdvancedSettingsContent />}
+   290→      </div>
+   291→    </div>
+   292→  );
+   293→}
+   294→
+   295→function AdvancedSettingsContent() {
+   296→  const {
+   297→    settings, updateSettings,
+   298→    disconnectProbe, sendProbeCommand,
+   299→    syncProbeHistory, clearHistory,
+   300→    hasDevice, showToast,
+   301→    historyEntries,
+   302→    loadHistory, loadSettings,
+   303→  } = useGrainStore();
+   304→
+   305→  const lang = settings.language as AppLanguage;
+   306→  const hasConnection = hasDevice;
+   307→  const fileInputRef = useRef<HTMLInputElement | null>(null);
+   308→  const importModeRef = useRef<'merge' | 'replace'>('merge');
+   309→  const [confirmReplace, setConfirmReplace] = useState(false);
+   310→  const [confirmClear, setConfirmClear] = useState(false);
+   311→  const overlayRef = useRef<HTMLDivElement | null>(null);
+   312→  const lastFocusRef = useRef<HTMLElement | null>(null);
+   313→
+   314→  /* Focus trap + focus restore for the destructive confirmation modal.
+   315→     Tab/Shift+Tab cycle inside the dialog; Escape closes (capture-phase,
+   316→     works even when focus sits on body); on close, focus returns to the
+   317→     element that opened the dialog (captured in the click handler — by the
+   318→     time the open-effect runs, React has already applied autoFocus to the
+   319→     Cancel button, so the effect would otherwise capture the dialog itself). */
+   320→  const openReplaceModal = () => {
+   321→    lastFocusRef.current = document.activeElement as HTMLElement | null;
+   322→    setConfirmReplace(true);
+   323→  };
+   324→
+   325→  useEffect(() => {
+   326→    if (!confirmReplace) return;
+   327→    const onKey = (e: KeyboardEvent) => {
+   328→      if (e.key === 'Escape') {
+   329→        e.stopPropagation();
+   330→        setConfirmReplace(false);
+   331→        return;
+   332→      }
+   333→      if (e.key !== 'Tab') return;
+   334→      const overlay = overlayRef.current;
+   335→      if (!overlay) return;
+   336→      const focusables = Array.from(
+   337→        overlay.querySelectorAll<HTMLElement>(
+   338→          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+   339→        ),
+   340→      ).filter((el) => !el.hasAttribute('disabled'));
+   341→      if (focusables.length === 0) return;
+   342→      const first = focusables[0];
+   343→      const last = focusables[focusables.length - 1];
+   344→      const active = document.activeElement;
+   345→      if (e.shiftKey && (active === first || !overlay.contains(active))) {
+   346→        e.preventDefault();
+   347→        last.focus();
+   348→      } else if (!e.shiftKey && (active === last || !overlay.contains(active))) {
+   349→        e.preventDefault();
+   350→        first.focus();
+   351→      }
+   352→    };
+   353→    document.addEventListener('keydown', onKey, true);
+   354→    return () => {
+   355→      document.removeEventListener('keydown', onKey, true);
+   356→      lastFocusRef.current?.focus?.();
+   357→    };
+   358→  }, [confirmReplace]);
+   359→
+   360→  /* Android Back closes this confirmation first — it must NOT also trigger
+   361→   * the parent Settings tab's back handler (handled=true stops the policy). */
+   362→  useEffect(() => {
+   363→    if (!confirmReplace) return;
+   364→    return registerBackConsumer({
+   365→      id: 'settings-replace-modal',
+   366→      priority: 30,
+   367→      onClose: () => {
+   368→        setConfirmReplace(false);
+   369→        return true;
+   370→      },
+   371→    });
+   372→  }, [confirmReplace]);
+   373→
+   374→  const openImportPicker = (mode: 'merge' | 'replace') => {
+   375→    importModeRef.current = mode;
+   376→    fileInputRef.current?.click();
+   377→  };
+   378→
+   379→  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   380→    const file = e.target.files?.[0];
+   381→    e.target.value = ''; // allow re-selecting the same file
+   382→    if (!file) return;
+   383→    const mode = importModeRef.current;
+   384→    try {
+   385→      const text = await file.text();
+   386→      const result = await importBackupJSON(text, mode);
+   387→      // Refresh the live store from the restored database
+   388→      await loadHistory();
+   389→      await loadSettings();
+   390→      showToast(`${t(mode === 'replace' ? 'toast.backup_replaced' : 'toast.backup_imported', lang)} · ${result.history}`);
+   391→    } catch (err) {
+   392→      showToast(err instanceof Error && err.message === 'invalid'
+   393→        ? t('toast.import_invalid', lang)
+   394→        : t('toast.import_failed', lang));
+   395→    }
+   396→  };
+   397→
+   398→  return (
+   399→    <>
+   400→      {/* ─── Thresholds — ONE compact segmented panel (moisture | temperature) ─── */}
+   401→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
+   402→        {t('settings.thresholds', lang)}
+   403→      </p>
+   404→      <ThresholdsPanel lang={lang} />
+   405→
+   406→      {/* ─── Glass Intensity (advanced, one compact row) ─── */}
+   407→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
+   408→        {t('settings.glass', lang)}
+   409→      </p>
+   410→      <GlassIntensityCard lang={lang} />
+   411→
+   412→      {/* ─── Accent Color ─── */}
+   413→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
+   414→        {t('accent.title', lang)}
+   415→      </p>
+   416→      <div className="grain-card p-4 mb-6">
+   417→        <div className="flex items-center justify-between">
+   418→          <div className="flex items-center gap-3">
+   419→            <div
+   420→              className="w-9 h-9 rounded-xl flex items-center justify-center"
+   421→              style={{ background: 'var(--gm-accent-dim)' }}
+   422→            >
+   423→              <Palette size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   424→            </div>
+   425→            <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+   426→              {t('accent.title', lang)}
+   427→            </span>
+   428→          </div>
+   429→        </div>
+   430→        <div className="flex justify-between mt-4 px-1">
+   431→          {ACCENT_COLORS.map((a) => (
+   432→            <div key={a.value} className="flex flex-col items-center gap-1.5">
+   433→              <button
+   434→                onClick={() => updateSettings({ accentColor: a.value })}
+   435→                className={`grain-accent-dot ${settings.accentColor === a.value ? 'selected' : ''}`}
+   436→                style={{ background: a.color }}
+   437→                aria-label={t(a.labelKey, lang)}
+   438→              />
+   439→              <span className="text-[9px] font-medium" style={{ color: settings.accentColor === a.value ? 'var(--gm-accent)' : 'var(--gm-text-tertiary)' }}>
+   440→                {t(a.labelKey, lang)}
+   441→              </span>
+   442→            </div>
+   443→          ))}
+   444→        </div>
+   445→      </div>
+   446→
+   447→      {/* ─── Probe Controls ─── */}
+   448→      {hasConnection && (
+   449→        <>
+   450→          <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   451→            {t('settings.probe_controls', lang)}
+   452→          </p>
+   453→          <div className="grain-card overflow-hidden mb-6">
+   454→            <button
+   455→              onClick={syncProbeHistory}
+   456→              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+   457→              style={{ color: 'var(--gm-text-primary)' }}
+   458→            >
+   459→              <div className="flex items-center gap-3">
+   460→                <ArrowClockwise size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   461→                <span className="text-sm font-medium">{t('settings.sync_history', lang)}</span>
+   462→              </div>
+   463→              <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.sync_history_desc', lang)}</span>
+   464→            </button>
+   465→            <div className="grain-separator" />
+   466→            <button
+   467→              onClick={() => sendProbeCommand('wake')}
+   468→              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+   469→              style={{ color: 'var(--gm-text-primary)' }}
+   470→            >
+   471→              <div className="flex items-center gap-3">
+   472→                <Wrench size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   473→                <span className="text-sm font-medium">{t('settings.wake_probe', lang)}</span>
+   474→              </div>
+   475→              <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.wake_probe_desc', lang)}</span>
+   476→            </button>
+   477→          </div>
+   478→        </>
+   479→      )}
+   480→
+   481→      {/* ─── Export / Data ─── */}
+   482→      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+   483→        {t('settings.data', lang)}
+   484→      </p>
+   485→      <div className="grain-card overflow-hidden mb-8">
+   486→        {/* Decision columns toggle — controls BOTH CSV entry points
+   487→            (this row + the History header export) via settings.exportDecisions */}
+   488→        <div className="flex justify-between items-center gap-4 px-5 py-4">
+   489→          <div className="flex items-center gap-3 min-w-0">
+   490→            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gm-accent-dim)' }}>
+   491→              <FileCsv size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+   492→            </div>
+   493→            <div className="min-w-0">
+   494→              <p className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.export_decisions', lang)}</p>
+   495→              <p className="text-[10px] leading-snug mt-0.5" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.export_decisions_desc', lang)}</p>
+   496→            </div>
+   497→          </div>
+   498→          <input
+   499→            type="checkbox"
+   500→            checked={settings.exportDecisions}
+   501→            onChange={(e) => { updateSettings({ exportDecisions: e.target.checked }); haptic(e.target.checked, 10); }}
+   502→            className="grain-toggle shrink-0"
+   503→            aria-label={t('settings.export_decisions', lang)}
+   504→          />
+   505→        </div>
+   506→        <div className="grain-separator" />
+   507→        <button
+   508→          onClick={async () => {
+   509→            if (historyEntries.length === 0) {
+   510→              showToast(t('toast.nothing_to_export', lang));
+   511→              return;
+   512→            }
+   513→            haptic(settings.hapticsEnabled, 8);
+   514→            try {
+   515→              /* Client-side builder — the readings live in this browser's
+   516→               * IndexedDB; a server route can never read them (the old
+   517→               * /api/export endpoint always failed with 500). */
+   518→              const csv = buildReadingsCsv(historyEntries, lang, settings.exportDecisions);
+   519→              const filename = `mochi-grain-readings-${format(Date.now(), 'yyyy-MM-dd')}.csv`;
+   520→              const outcome = await deliverCsv(csv, filename);
+   521→              if (outcome !== 'cancelled') showToast(tp('toast.exported', lang, { n: historyEntries.length }));
+   522→            } catch {
+   523→              showToast(t('toast.export_failed', lang));
+   524→            }
+   525→          }}
+   526→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   527→          style={{ color: 'var(--gm-text-primary)' }}
+   528→        >
+   529→          <div className="flex items-center gap-3">
+   530→            <DownloadSimple size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   531→            <span className="text-sm font-medium">{t('settings.export_csv', lang)}</span>
+   532→          </div>
+   533→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.download', lang)}</span>
+   534→        </button>
+   535→        <div className="grain-separator" />
+   536→        <button
+   537→          onClick={async () => {
+   538→            try {
+   539→              const json = await exportBackupJSON();
+   540→              const blob = new Blob([json], { type: 'application/json' });
+   541→              const url = URL.createObjectURL(blob);
+   542→              const a = document.createElement('a'); a.href = url;
+   543→              a.download = `grain-backup-${new Date().toISOString().split('T')[0]}.json`;
+   544→              a.click(); URL.revokeObjectURL(url);
+   545→              showToast(t('toast.backup_exported', lang));
+   546→            } catch { showToast(t('toast.export_failed', lang)); }
+   547→          }}
+   548→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   549→          style={{ color: 'var(--gm-text-primary)' }}
+   550→        >
+   551→          <div className="flex items-center gap-3">
+   552→            <Archive size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   553→            <span className="text-sm font-medium">{t('settings.export_backup', lang)}</span>
+   554→          </div>
+   555→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.full_data', lang)}</span>
+   556→        </button>
+   557→        <div className="grain-separator" />
+   558→        <button
+   559→          onClick={() => openImportPicker('merge')}
+   560→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   561→          style={{ color: 'var(--gm-text-primary)' }}
+   562→        >
+   563→          <div className="flex items-center gap-3">
+   564→            <UploadSimple size={18} weight="bold" style={{ color: 'var(--gm-text-secondary)' }} />
+   565→            <span className="text-sm font-medium">{t('settings.import_backup', lang)}</span>
+   566→          </div>
+   567→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.full_data', lang)}</span>
+   568→        </button>
+   569→        <div className="grain-separator" />
+   570→        <button
+   571→          onClick={openReplaceModal}
+   572→          className="w-full flex justify-between items-center px-5 py-4 text-left"
+   573→          style={{ color: '#EF4444' }}
+   574→        >
+   575→          <div className="flex items-center gap-3">
+   576→            <ArrowsClockwise size={18} weight="bold" style={{ color: '#EF4444' }} />
+   577→            <span className="text-sm font-medium">{t('settings.replace_data', lang)}</span>
+   578→          </div>
+   579→          <span className="text-[11px]" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.replace_desc', lang)}</span>
+   580→        </button>
+   581→        <input
+   582→          ref={fileInputRef}
+   583→          type="file"
+   584→          accept="application/json,.json"
+   585→          className="hidden"
+   586→          onChange={handleImportFile}
+   587→          aria-hidden="true"
+   588→          tabIndex={-1}
+   589→        />
+   590→
+   591→        {/* Replace-all confirmation modal (glass, app-token themed)
+   592→            Portaled into .grain-app: CSS vars are scoped there, and it has no
+   593→            transform/filter, so position:fixed still tracks the viewport. */}
+   594→        {confirmReplace && typeof document !== 'undefined' && createPortal(
+   595→          <div
+   596→            ref={overlayRef}
+   597→            className="grain-modal-overlay"
+   598→            role="dialog"
+   599→            aria-modal="true"
+   600→            aria-labelledby="grain-replace-title"
+   601→            onClick={(e) => { if (e.target === e.currentTarget) setConfirmReplace(false); }}
+   602→            onKeyDown={(e) => { if (e.key === 'Escape') setConfirmReplace(false); }}
+   603→          >
+   604→            <div className="grain-modal-card">
+   605→              <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+   606→                <Warning size={20} weight="fill" style={{ color: '#EF4444' }} />
+   607→              </div>
+   608→              <h3 id="grain-replace-title" className="text-base font-bold tracking-tight mb-1.5" style={{ color: 'var(--gm-text-primary)' }}>
+   609→                {t('settings.replace_confirm_title', lang)}
+   610→              </h3>
+   611→              <p className="text-[12px] leading-relaxed mb-5" style={{ color: 'var(--gm-text-secondary)' }}>
+   612→                {t('settings.replace_confirm_desc', lang)}
+   613→              </p>
+   614→              <div className="flex gap-3">
+   615→                <button
+   616→                  autoFocus
+   617→                  onClick={() => setConfirmReplace(false)}
+   618→                  className="flex-1 py-3 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 grain-modal-cancel"
+   619→                >
+   620→                  {t('settings.cancel', lang)}
+   621→                </button>
+   622→                <button
+   623→                  onClick={() => {
+   624→                    setConfirmReplace(false);
+   625→                    openImportPicker('replace');
+   626→                  }}
+   627→                  className="flex-1 py-3 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95"
+   628→                  style={{ background: 'rgba(239, 68, 68, 0.14)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.32)' }}
+   629→                >
+   630→                  {t('settings.replace_confirm_action', lang)}
+   631→                </button>
+   632→              </div>
+   633→            </div>
+   634→          </div>,
+   635→          document.querySelector('.grain-app') ?? document.body,
+   636→        )}
+   637→        <div className="grain-separator" />
+   638→        {/* Clear history — animated delete control. Clicking NEVER deletes:
+   639→            it arms the shared confirmation dialog; only an explicit confirm
+   640→            performs the destructive write. The row's free space sits to the
+   641→            LEFT of the control, so the hover expansion shifts nothing. */}
+   642→        <div className="flex justify-between items-center gap-3 py-2.5 pl-5 pr-3">
+   643→          <div className="flex items-center gap-3 min-w-0">
+   644→            <Trash size={18} weight="bold" style={{ color: '#EF4444', flexShrink: 0 }} />
+   645→            <div className="min-w-0">
+   646→              <p className="text-sm font-medium m-0" style={{ color: '#EF4444' }}>{t('settings.clear_history', lang)}</p>
+   647→              <p className="text-[10px] mt-0.5 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>{t('settings.local_only', lang)}</p>
+   648→            </div>
+   649→          </div>
+   650→          <DeleteButton
+   651→            ariaLabel={t('settings.clear_history', lang)}
+   652→            revealText={t('settings.delete', lang)}
+   653→            onActivate={() => setConfirmClear(true)}
+   654→            hapticsEnabled={settings.hapticsEnabled}
+   655→          />
+   656→        </div>
+   657→
+   658→        {/* Clear-history confirmation (shared glass dialog; Android Back
+   659→            closes this first, Escape cancels, focus is trapped+restored). */}
+   660→        <ConfirmDialog
+   661→          open={confirmClear}
+   662→          onOpenChange={setConfirmClear}
+   663→          title={t('settings.clear_confirm_title', lang)}
+   664→          description={tp('settings.clear_confirm_desc', lang, { n: historyEntries.length })}
+   665→          confirmLabel={t('settings.clear_confirm_action', lang)}
+   666→          cancelLabel={t('settings.cancel', lang)}
+   667→          hapticsEnabled={settings.hapticsEnabled}
+   668→          onConfirm={async () => {
+   669→            await clearHistory();
+   670→            showToast(t('toast.history_cleared', lang));
+   671→          }}
+   672→        />
+   673→      </div>
+   674→    </>
+   675→  );
+   676→}
+   677→
+   678→/* ═══════════════════════════════════════════════════════════
+   679→   THRESHOLD EDITING (Advanced Settings)
+   680→   ONE compact segmented panel: Moisture | Temperature. Only
+   681→   the selected metric's three rows are mounted — switching
+   682→   segments never touches stored values. Each row: severity
+   683→   chip, live numeric value, PrecisionSlider (ordering enforced
+   684→   by sliderBounds() — safe < warn < critical is unproducible).
+   685→   Persisted via the standard updateSettings() flow; Mochi
+   686→   re-evaluates automatically against the new thresholds.
+   687→   ═══════════════════════════════════════════════════════════ */
+   688→
+   689→const THRESHOLD_ROW_META: Record<ThresholdKey, { labelKey: string; colorVar: string; unit: string; prefix: string }> = {
+   690→  safe:         { labelKey: 'settings.safe',         colorVar: 'var(--gm-band-excellent)', unit: '%',  prefix: '<' },
+   691→  warn:         { labelKey: 'settings.warn',         colorVar: 'var(--gm-band-fair)',      unit: '%',  prefix: '>' },
+   692→  critical:     { labelKey: 'settings.critical',     colorVar: 'var(--gm-band-risky)',     unit: '%',  prefix: '>' },
+   693→  tempSafe:     { labelKey: 'settings.safe',         colorVar: 'var(--gm-band-excellent)', unit: '°C', prefix: '<' },
+   694→  tempWarn:     { labelKey: 'settings.warn',         colorVar: 'var(--gm-band-fair)',      unit: '°C', prefix: '>' },
+   695→  tempCritical: { labelKey: 'settings.critical',     colorVar: 'var(--gm-band-risky)',     unit: '°C', prefix: '>' },
+   696→};
+   697→
+   698→type ThresholdMetric = 'moisture' | 'temperature';
+   699→
+   700→function ThresholdsPanel({ lang }: { lang: AppLanguage }) {
+   701→  const { settings, updateSettings, showToast } = useGrainStore();
+   702→  const [metric, setMetric] = useState<ThresholdMetric>('moisture');
+   703→  const hapticsEnabled = settings.hapticsEnabled;
+   704→
+   705→  /* Read fresh state on every edit — no stale-neighbour clamping
+   706→     even if two change events batch into one render. */
+   707→  const update = (key: ThresholdKey, value: number) => {
+   708→    const current = useGrainStore.getState().settings.thresholds;
+   709→    const next = clampThresholdEdit(current, key, value);
+   710→    if (next === current) return; // clamped to the same value — no write
+   711→    updateSettings({ thresholds: next });
+   712→  };
+   713→
+   714→  // Re-evaluating Mochi against the new thresholds happens automatically:
+   715→  // grain-store reads settings.thresholds on every evaluation.
+   716→  const commitToast = (key: ThresholdKey, committed: number) => {
+   717→    showToast(tp('toast.threshold_updated', lang, {
+   718→      v: `${committed.toFixed(1)}${THRESHOLD_ROW_META[key].unit}`,
+   719→    }));
+   720→  };
+   721→
+   722→  const keys: ThresholdKey[] = metric === 'moisture' ? MOISTURE_KEYS : TEMPERATURE_KEYS;
+   723→
+   724→  return (
+   725→    <div className="grain-card p-4 mb-2">
+   726→      {/* Segmented metric selector — switching NEVER alters stored values */}
+   727→      <div
+   728→        className="grain-seg grain-seg-lg mb-4"
+   729→        role="tablist"
+   730→        aria-label={t('settings.thresholds', lang)}
+   731→      >
+   732→        <button
+   733→          role="tab"
+   734→          aria-selected={metric === 'moisture'}
+   735→          className={metric === 'moisture' ? 'active' : ''}
+   736→          onClick={() => {
+   737→            if (metric === 'moisture') return;
+   738→            haptic(hapticsEnabled, HAPTIC_SELECT);
+   739→            setMetric('moisture');
+   740→          }}
+   741→        >
+   742→          {t('history.moisture', lang)}
+   743→        </button>
+   744→        <button
+   745→          role="tab"
+   746→          aria-selected={metric === 'temperature'}
+   747→          className={metric === 'temperature' ? 'active' : ''}
+   748→          onClick={() => {
+   749→            if (metric === 'temperature') return;
+   750→            haptic(hapticsEnabled, HAPTIC_SELECT);
+   751→            setMetric('temperature');
+   752→          }}
+   753→        >
+   754→          {t('history.temperature', lang)}
+   755→        </button>
+   756→      </div>
+   757→
+   758→      <div className="space-y-4">
+   759→        {keys.map((key) => {
+   760→          const meta = THRESHOLD_ROW_META[key];
+   761→          const thresholds = settings.thresholds;
+   762→          const bounds = sliderBounds(thresholds, key);
+   763→          const value = thresholds[key];
+   764→          return (
+   765→            <div key={key} className="grain-th-row">
+   766→              <div className="flex justify-between items-center mb-0.5">
+   767→                <span className="grain-th-chip" style={{ color: meta.colorVar }}>
+   768→                  <span className="grain-th-chip-dot" style={{ background: meta.colorVar }} aria-hidden="true" />
+   769→                  {t(meta.labelKey, lang)}
+   770→                </span>
+   771→                <span className="text-sm font-bold grain-tabular" style={{ color: 'var(--gm-text-primary)' }}>
+   772→                  {meta.prefix} {value.toFixed(1)}{meta.unit}
+   773→                </span>
+   774→              </div>
+   775→              <PrecisionSlider
+   776→                min={bounds.min}
+   777→                max={bounds.max}
+   778→                step={0.5}
+   779→                value={value}
+   780→                onValueChange={(v) => update(key, v)}
+   781→                onValueCommit={(v) => commitToast(key, v)}
+   782→                ariaLabel={`${t(meta.labelKey, lang)} — ${metric === 'moisture' ? t('history.moisture', lang) : t('history.temperature', lang)}`}
+   783→                format={(v) => `${v.toFixed(1)}${meta.unit}`}
+   784→                hapticsEnabled={hapticsEnabled}
+   785→                colorVar={meta.colorVar}
+   786→              />
+   787→            </div>
+   788→          );
+   789→        })}
+   790→      </div>
+   791→      <p className="text-[10px] leading-relaxed mt-4 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
+   792→        {t('settings.thresholds_desc', lang)}
+   793→      </p>
+   794→    </div>
+   795→  );
+   796→}
+   797→
+   798→/* ═══════════════════════════════════════════════════════════
+   799→   GLASS INTENSITY (Advanced Settings)
+   800→   One compact glass-control row driving computeGlassVars()
+   801→   live via settings.glassOpacity. 30% = subtle frosting ·
+   802→   100% = pronounced liquid glass. Persists through
+   803→   updateSettings — survives reloads, theme switches and
+   804→   (via IndexedDB) app restarts.
+   805→   ═══════════════════════════════════════════════════════════ */
+   806→
+   807→function GlassIntensityCard({ lang }: { lang: AppLanguage }) {
+   808→  const { settings, updateSettings } = useGrainStore();
+   809→  const pct = Math.round(clampGlass(settings.glassOpacity) * 100);
+   810→  const minPct = Math.round(GLASS_MIN * 100);
+   811→  const maxPct = Math.round(GLASS_MAX * 100);
+   812→
+   813→  return (
+   814→    <div className="grain-card p-4 mb-6">
+   815→      <div className="flex justify-between items-center mb-0.5">
+   816→        <span
+   817→          className="text-[10px] font-bold tracking-[0.14em] uppercase"
+   818→          style={{ color: 'var(--gm-text-secondary)' }}
+   819→        >
+   820→          {t('settings.glass', lang)}
+   821→        </span>
+   822→        <output
+   823→          className="text-sm font-bold grain-tabular"
+   824→          style={{ color: 'var(--gm-accent)' }}
+   825→        >
+   826→          {pct}%
+   827→        </output>
+   828→      </div>
+   829→      <PrecisionSlider
+   830→        min={minPct}
+   831→        max={maxPct}
+   832→        step={5}
+   833→        value={pct}
+   834→        onValueChange={(v) => updateSettings({ glassOpacity: v / 100 })}
+   835→        ariaLabel={t('settings.glass', lang)}
+   836→        format={(v) => `${Math.round(v)}%`}
+   837→        hapticsEnabled={settings.hapticsEnabled}
+   838→        colorVar="var(--gm-accent)"
+   839→      />
+   840→      <p className="text-[10px] leading-relaxed mt-2 mb-0" style={{ color: 'var(--gm-text-tertiary)' }}>
+   841→        {t('settings.glass_hint', lang)}
+   842→      </p>
+   843→    </div>
+   844→  );
+   845→}
+   846→
+   847→/* ═══════════════════════════════════════════════════════════
+   848→   THEME PILL SWITCH — premium neutral instrument toggle
+   849→   Slender track, precise circular thumb, sun/moon glyphs,
+   850→   restrained 240ms travel. Neutral track + thumb colors in
+   851→   BOTH themes (a tiny accent appears only on the leading icon
+   852→   box, never on the switch itself — the switch and the system
+   853→   chrome must never flood with the accent color).
+   854→   Proper switch semantics: role=switch, aria-checked,
+   855→   keyboard activation, visible focus ring.
+   856→   ═══════════════════════════════════════════════════════════ */
+   857→
+   858→function ThemePillSwitch({
+   859→  isDark,
+   860→  label,
+   861→  onToggle,
+   862→}: {
+   863→  isDark: boolean;
+   864→  label: string;
+   865→  onToggle: () => void;
+   866→}) {
+   867→  return (
+   868→    <button
+   869→      type="button"
+   870→      role="switch"
+   871→      aria-checked={isDark}
+   872→      aria-label={label}
+   873→      onClick={onToggle}
+   874→      className={`grain-theme-pill ${isDark ? 'is-dark' : 'is-light'}`}
+   875→    >
+   876→      <span className="grain-theme-pill-glyph glyph-left" aria-hidden="true">
+   877→        <Sun size={10} weight="fill" />
+   878→      </span>
+   879→      <span className="grain-theme-pill-glyph glyph-right" aria-hidden="true">
+   880→        <Moon size={10} weight="fill" />
+   881→      </span>
+   882→      <span className="grain-theme-pill-thumb" aria-hidden="true">
+   883→        {isDark ? <Moon size={11} weight="fill" /> : <Sun size={11} weight="fill" />}
+   884→      </span>
+   885→    </button>
+   886→  );
+   887→}
+   888→

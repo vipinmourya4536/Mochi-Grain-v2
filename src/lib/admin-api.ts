@@ -110,8 +110,10 @@ function parseDiscoverResponse(json: unknown): DiscoverVideo[] {
     const obj = json as Record<string, unknown>;
     if (Array.isArray(obj.videos)) list = obj.videos;
     else if (Array.isArray(obj.items)) list = obj.items;
-    else if (Array.isArray(obj.data) && obj.data != null && Array.isArray((obj.data as any).videos)) {
-      list = (obj.data as { videos: unknown[] }).videos;
+    else if (obj.data != null && typeof obj.data === 'object') {
+      // Nested envelope: { data: { videos: [...] } }
+      const inner = obj.data as Record<string, unknown>;
+      if (Array.isArray(inner.videos)) list = inner.videos;
     }
   }
   if (!list) {
@@ -175,9 +177,9 @@ function toDiscoverVideo(raw: unknown): DiscoverVideo | null {
      YouTube thumbnail for YouTube links only. Otherwise the card's
      branded fallback tile renders (never a broken <img>). */
   const givenThumb = asString(o.thumbnail ?? o.thumbnailUrl ?? o.thumb);
+  const ytId = youtubeIdFromUrl(url);
   const thumbnail =
-    givenThumb ??
-    (youtubeIdFromUrl(url) ? `https://img.youtube.com/vi/${youtubeIdFromUrl(url)}/hqdefault.jpg` : '');
+    givenThumb ?? (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '');
 
   return { id, title, source, thumbnail, url, why, tags };
 }

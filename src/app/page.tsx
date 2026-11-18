@@ -48,10 +48,22 @@ function computeThemeColor(isDark: boolean): string {
 }
 
 export default function GrainMonitorPage() {
-  const {
-    activeTab, deviceState, riskTheme, currentReading, settings, btAvailable,
-    loadSettings, loadHistory, setBtAvailable, restoreNativeSession,
-  } = useGrainStore();
+  /* Selector-based subscription (zustand v5) — the page shell re-renders
+     ONLY when fields it actually renders change (tab, connection state,
+     risk theme, settings, BT availability). A live BLE packet no longer
+     re-renders the whole page tree (Header/Nav/Toast + tab children);
+     ConnectedView subscribes to the reading itself. `hasReading` is a
+     BOOLEAN selector so per-packet Reading object churn cannot re-render. */
+  const activeTab = useGrainStore((s) => s.activeTab);
+  const deviceState = useGrainStore((s) => s.deviceState);
+  const riskTheme = useGrainStore((s) => s.riskTheme);
+  const hasReading = useGrainStore((s) => s.currentReading !== null);
+  const settings = useGrainStore((s) => s.settings);
+  const btAvailable = useGrainStore((s) => s.btAvailable);
+  const loadSettings = useGrainStore((s) => s.loadSettings);
+  const loadHistory = useGrainStore((s) => s.loadHistory);
+  const setBtAvailable = useGrainStore((s) => s.setBtAvailable);
+  const restoreNativeSession = useGrainStore((s) => s.restoreNativeSession);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDark = settings.theme === 'dark';
@@ -188,7 +200,7 @@ export default function GrainMonitorPage() {
   const renderHomeState = () => {
     // When BT is off, show BT prompt in the hero card area
     if (btAvailable === false) return <BtOffHero />;
-    if (currentReading) return <ConnectedView />;
+    if (hasReading) return <ConnectedView />;
     switch (deviceState) {
       case 'disconnected': return <DisconnectedView />;
       case 'connecting': return <ConnectingView />;

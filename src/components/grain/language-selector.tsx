@@ -11,7 +11,10 @@ import { Check, CaretDown } from '@phosphor-icons/react/dist/ssr';
  * Utility action weight – deliberately lighter than the battery capsule.
  */
 export function LanguageSelector() {
-  const { settings, updateSettings } = useGrainStore();
+  /* Selector-based subscription — the selector re-renders only when the
+     language setting or the stable action references change. */
+  const settings = useGrainStore((s) => s.settings);
+  const updateSettings = useGrainStore((s) => s.updateSettings);
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const lang = settings.language as AppLanguage;

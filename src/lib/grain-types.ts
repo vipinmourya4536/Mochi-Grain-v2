@@ -238,6 +238,24 @@ export interface AppSettings {
   trendsMaWindow: number;   // moving-average window in readings (5 | 7 | 14)
   detailMetric: TrendsMetric; // metric shown by the detail context sparkline
   exportDecisions: boolean; // CSV exports include decision message + action columns
+  samplingIntervalMs: number; // min gap between CAPTURED readings (0 = every packet)
+}
+
+/** Sampling-interval presets (Settings → Sampling Interval).
+ *  The probe pushes BLE notifications at its own pace; this gate decides
+ *  which packets are captured into the app: with an interval of N ms only
+ *  the first notification in each N-window is stored/displayed.
+ *  0 = realtime (every packet — the previous fixed behavior). */
+export const SAMPLING_INTERVAL_OPTIONS_MS: number[] = [0, 1000, 5000, 15000, 30000, 60000, 300000];
+
+/** Clamp for unknown/legacy stored values (e.g. settings persisted before
+ *  this field existed merge with DEFAULT_SETTINGS, but defensive is defensive). */
+export function clampSamplingInterval(v: unknown): number {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  if (n <= 0) return 0;
+  // Snap to the nearest preset so hand-edited backups stay in range.
+  return SAMPLING_INTERVAL_OPTIONS_MS.reduce((best, p) =>
+    Math.abs(p - n) < Math.abs(best - n) ? p : best, 0);
 }
 
 export const DEFAULT_THRESHOLDS: GrainThresholds = {
@@ -281,6 +299,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trendsMaWindow: 7,
   detailMetric: 'moisture',
   exportDecisions: true,
+  samplingIntervalMs: 0, // realtime — capture every packet (previous behavior)
 };
 
 /** Allowed moving-average window sizes (segmented control in the trends header) */

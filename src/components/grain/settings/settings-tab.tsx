@@ -5,10 +5,10 @@ import { createPortal } from 'react-dom';
 import { useGrainStore } from '@/lib/grain-store';
 import {
   Cpu, DownloadSimple, ArrowClockwise, Trash, Power, Wrench,
-  Sun, Moon, CaretDown, SlidersHorizontal, Palette, Check,
+  Sun, Moon, CaretDown, SlidersHorizontal, Palette, Check, Timer,
   DeviceMobile, Archive, UploadSimple, ArrowsClockwise, Warning, FileCsv,
 } from '@phosphor-icons/react/dist/ssr';
-import { type GrainType, type AccentColor, GRAIN_OPTIONS } from '@/lib/grain-types';
+import { type GrainType, type AccentColor, GRAIN_OPTIONS, SAMPLING_INTERVAL_OPTIONS_MS } from '@/lib/grain-types';
 import { t, tp, tGrain, type AppLanguage } from '@/lib/i18n';
 import { haptic, HAPTIC_SELECT, HAPTIC_TOGGLE } from '@/lib/haptics';
 import { PrecisionSlider } from '@/components/grain/precision-slider';
@@ -38,11 +38,32 @@ const ACCENT_COLORS: { value: AccentColor; color: string; labelKey: string }[] =
   { value: 'teal', color: '#14B8A6', labelKey: 'accent.teal' },
 ];
 
+/** Human label for a sampling-interval preset (radiogroup + toast).
+ *  0 → localized "Realtime"; seconds below a minute, minutes otherwise. */
+function samplingLabel(ms: number, lang: AppLanguage): string {
+  if (ms <= 0) return t('settings.sampling_realtime', lang);
+  if (ms < 60_000) return `${Math.round(ms / 1000)} s`;
+  return `${Math.round(ms / 60_000)} min`;
+}
+
 export function SettingsTab() {
-  const {
-    deviceInfo, settings, updateSettings, selectGrainType,
-    disconnectProbe, sendProbeCommand, hasDevice, showToast,
-  } = useGrainStore();
+  /* Selector-based subscription (zustand v5): each field re-renders only
+     when ITS value changes. `settings` identity is stable while BLE
+     packets stream, so this tab no longer re-renders per reading; the
+     Device card subscribes to name/meta STRINGS so battery/signal packet
+     updates (new deviceInfo objects) don't re-render the whole tab either. */
+  const deviceName = useGrainStore((s) => s.deviceInfo?.name ?? null);
+  const deviceFirmware = useGrainStore((s) => s.deviceInfo?.firmware ?? null);
+  const deviceMeta = useGrainStore(
+    (s) => (s.deviceInfo ? `${s.deviceInfo.firmware} · ${s.deviceInfo.platform}` : null),
+  );
+  const settings = useGrainStore((s) => s.settings);
+  const updateSettings = useGrainStore((s) => s.updateSettings);
+  const selectGrainType = useGrainStore((s) => s.selectGrainType);
+  const disconnectProbe = useGrainStore((s) => s.disconnectProbe);
+  const sendProbeCommand = useGrainStore((s) => s.sendProbeCommand);
+  const hasDevice = useGrainStore((s) => s.hasDevice);
+  const showToast = useGrainStore((s) => s.showToast);
   const { canInstall, isStandalone, promptInstall } = usePwaInstall();
 
   const lang = settings.language as AppLanguage;
@@ -51,7 +72,7 @@ export function SettingsTab() {
   const hasConnection = hasDevice;
 
   return (
-    <div className="pt-2 pb-6 grain-fade-in">
+    <div className="pt-2 pb-6 grain-fade-in grain-stagger">
       <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: 'var(--gm-text-primary)' }}>
         {t('settings.title', lang)}
       </h2>
@@ -96,6 +117,47 @@ export function SettingsTab() {
         </div>
       </div>
 
+      {/* ─── Accent Color (themes) — lives NEXT to light/dark mode, per UX request:
+            persona belongs with the everyday controls, not buried in Advanced ─── */}
+      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+        {t('accent.title', lang)}
+      </p>
+      <div className="grain-card p-4 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: 'var(--gm-accent-dim)' }}
+            >
+              <Palette size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+            </div>
+            <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+              {t('accent.title', lang)}
+            </span>
+          </div>
+        </div>
+        <div className="flex justify-between mt-4 px-1">
+          {ACCENT_COLORS.map((a) => (
+            <div key={a.value} className="flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => {
+                  if (settings.accentColor === a.value) return;
+                  haptic(settings.hapticsEnabled, HAPTIC_SELECT);
+                  updateSettings({ accentColor: a.value });
+                }}
+                className={`grain-accent-dot ${settings.accentColor === a.value ? 'selected' : ''}`}
+                style={{ background: a.color }}
+                aria-label={t(a.labelKey, lang)}
+                aria-pressed={settings.accentColor === a.value}
+              />
+              <span className="text-[9px] font-medium" style={{ color: settings.accentColor === a.value ? 'var(--gm-accent)' : 'var(--gm-text-tertiary)' }}>
+                {t(a.labelKey, lang)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ─── Device ─── */}
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
         {t('settings.device', lang)}
@@ -107,10 +169,10 @@ export function SettingsTab() {
           </div>
           <div>
             <h3 className="font-bold text-sm tracking-tight" style={{ color: 'var(--gm-text-primary)' }}>
-              {deviceInfo?.name || '—'}
+              {deviceName || '—'}
             </h3>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--gm-text-secondary)' }}>
-              {deviceInfo ? `${deviceInfo.firmware} · ${deviceInfo.platform}` : t('settings.no_device', lang)}
+              {deviceMeta || t('settings.no_device', lang)}
             </p>
           </div>
         </div>
@@ -150,6 +212,58 @@ export function SettingsTab() {
         </div>
       </div>
 
+      {/* ─── Sampling Interval — the "time section": how often live readings
+             are CAPTURED. The probe pushes packets at the firmware's pace; this
+             gate keeps one per window (realtime = every packet, the previous
+             fixed behavior). Enforced in grain-store.handleReading BEFORE any
+             storage/evaluation work, so skipped packets cost nothing. ─── */}
+      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+        {t('settings.sampling', lang)}
+      </p>
+      <div className="grain-card p-4 mb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--gm-accent-dim)' }}>
+            <Timer size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
+          </div>
+          <div className="min-w-0">
+            <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
+              {t('settings.sampling', lang)}
+            </span>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--gm-text-tertiary)' }}>
+              {t('settings.sampling_desc', lang)}
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label={t('settings.sampling', lang)}>
+          {SAMPLING_INTERVAL_OPTIONS_MS.map((ms) => {
+            const isActive = settings.samplingIntervalMs === ms;
+            return (
+              <button
+                key={ms}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                onClick={() => {
+                  if (isActive) return;
+                  haptic(settings.hapticsEnabled, HAPTIC_SELECT);
+                  updateSettings({ samplingIntervalMs: ms });
+                  showToast(tp('toast.sampling_updated', lang, { v: samplingLabel(ms, lang) }));
+                }}
+                className={`grain-grain-card ${isActive ? 'active' : ''}`}
+              >
+                <span className="truncate">{samplingLabel(ms, lang)}</span>
+                {isActive && <Check size={12} weight="bold" style={{ flexShrink: 0 }} />}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[10px] leading-relaxed mt-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
+          {settings.samplingIntervalMs === 0
+            ? t('settings.sampling_realtime_hint', lang)
+            : t('settings.sampling_hint', lang)}
+        </p>
+      </div>
+
       {/* ─── Grain Type – the ONLY grain selector in the app ─── */}
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
         {t('settings.grain_type', lang)}
@@ -177,8 +291,9 @@ export function SettingsTab() {
         </div>
       </div>
 
-      {/* ═══ Threshold sliders live in ADVANCED SETTINGS (see below) —
-             the main view stays focused on daily controls. ═══ */}
+      {/* ═══ Threshold sliders live at the VERY BOTTOM of Advanced Settings
+             (the last thing in the whole Settings page) — rare, deliberate
+             controls belong at the deepest point of the hierarchy. ═══ */}
 
       {/* ═══ PREFERENCES ═══ */}
       <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)' }}>
@@ -225,7 +340,7 @@ export function SettingsTab() {
               if (outcome === 'accepted') showToast(t('toast.install_ok', lang));
               else if (outcome === 'dismissed') showToast(t('toast.install_dismissed', lang));
             }}
-            className="w-full flex justify-between items-center px-5 py-4 text-left"
+            className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
             style={{ color: 'var(--gm-text-primary)' }}
           >
             <div className="flex items-center gap-3">
@@ -256,7 +371,7 @@ export function SettingsTab() {
         <div className="grain-separator" />
         <div className="flex justify-between items-center px-5 py-4">
           <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>{t('settings.probe_firmware', lang)}</span>
-          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>{deviceInfo?.firmware || '—'}</span>
+          <span className="text-[11px]" style={{ color: 'var(--gm-text-secondary)' }}>{deviceFirmware || '—'}</span>
         </div>
       </div>
 
@@ -293,14 +408,19 @@ export function SettingsTab() {
 }
 
 function AdvancedSettingsContent() {
-  const {
-    settings, updateSettings,
-    disconnectProbe, sendProbeCommand,
-    syncProbeHistory, clearHistory,
-    hasDevice, showToast,
-    historyEntries,
-    loadHistory, loadSettings,
-  } = useGrainStore();
+  /* Selector-based subscription — see SettingsTab note. historyCount (a
+     number) replaces the historyEntries ARRAY so live packets streaming in
+     don't re-render this whole panel, only the count changes it displays. */
+  const settings = useGrainStore((s) => s.settings);
+  const updateSettings = useGrainStore((s) => s.updateSettings);
+  const sendProbeCommand = useGrainStore((s) => s.sendProbeCommand);
+  const syncProbeHistory = useGrainStore((s) => s.syncProbeHistory);
+  const clearHistory = useGrainStore((s) => s.clearHistory);
+  const hasDevice = useGrainStore((s) => s.hasDevice);
+  const showToast = useGrainStore((s) => s.showToast);
+  const historyCount = useGrainStore((s) => s.historyEntries.length);
+  const loadHistory = useGrainStore((s) => s.loadHistory);
+  const loadSettings = useGrainStore((s) => s.loadSettings);
 
   const lang = settings.language as AppLanguage;
   const hasConnection = hasDevice;
@@ -397,52 +517,11 @@ function AdvancedSettingsContent() {
 
   return (
     <>
-      {/* ─── Thresholds — ONE compact segmented panel (moisture | temperature) ─── */}
-      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
-        {t('settings.thresholds', lang)}
-      </p>
-      <ThresholdsPanel lang={lang} />
-
       {/* ─── Glass Intensity (advanced, one compact row) ─── */}
-      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-6" style={{ color: 'var(--gm-text-tertiary)' }}>
+      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
         {t('settings.glass', lang)}
       </p>
       <GlassIntensityCard lang={lang} />
-
-      {/* ─── Accent Color ─── */}
-      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-4" style={{ color: 'var(--gm-text-tertiary)' }}>
-        {t('accent.title', lang)}
-      </p>
-      <div className="grain-card p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'var(--gm-accent-dim)' }}
-            >
-              <Palette size={18} weight="bold" style={{ color: 'var(--gm-accent)' }} />
-            </div>
-            <span className="text-sm font-medium" style={{ color: 'var(--gm-text-primary)' }}>
-              {t('accent.title', lang)}
-            </span>
-          </div>
-        </div>
-        <div className="flex justify-between mt-4 px-1">
-          {ACCENT_COLORS.map((a) => (
-            <div key={a.value} className="flex flex-col items-center gap-1.5">
-              <button
-                onClick={() => updateSettings({ accentColor: a.value })}
-                className={`grain-accent-dot ${settings.accentColor === a.value ? 'selected' : ''}`}
-                style={{ background: a.color }}
-                aria-label={t(a.labelKey, lang)}
-              />
-              <span className="text-[9px] font-medium" style={{ color: settings.accentColor === a.value ? 'var(--gm-accent)' : 'var(--gm-text-tertiary)' }}>
-                {t(a.labelKey, lang)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* ─── Probe Controls ─── */}
       {hasConnection && (
@@ -453,7 +532,7 @@ function AdvancedSettingsContent() {
           <div className="grain-card overflow-hidden mb-6">
             <button
               onClick={syncProbeHistory}
-              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+              className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
               style={{ color: 'var(--gm-text-primary)' }}
             >
               <div className="flex items-center gap-3">
@@ -465,7 +544,7 @@ function AdvancedSettingsContent() {
             <div className="grain-separator" />
             <button
               onClick={() => sendProbeCommand('wake')}
-              className="w-full flex justify-between items-center px-5 py-4 transition-colors text-left"
+              className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
               style={{ color: 'var(--gm-text-primary)' }}
             >
               <div className="flex items-center gap-3">
@@ -506,7 +585,7 @@ function AdvancedSettingsContent() {
         <div className="grain-separator" />
         <button
           onClick={async () => {
-            if (historyEntries.length === 0) {
+            if (historyCount === 0) {
               showToast(t('toast.nothing_to_export', lang));
               return;
             }
@@ -514,16 +593,19 @@ function AdvancedSettingsContent() {
             try {
               /* Client-side builder — the readings live in this browser's
                * IndexedDB; a server route can never read them (the old
-               * /api/export endpoint always failed with 500). */
-              const csv = buildReadingsCsv(historyEntries, lang, settings.exportDecisions);
+               * /api/export endpoint always failed with 500). Entries are
+               * read at click time via getState() (always fresh, and no
+               * per-packet re-render subscription on this panel). */
+              const entries = useGrainStore.getState().historyEntries;
+              const csv = buildReadingsCsv(entries, lang, settings.exportDecisions);
               const filename = `mochi-grain-readings-${format(Date.now(), 'yyyy-MM-dd')}.csv`;
               const outcome = await deliverCsv(csv, filename);
-              if (outcome !== 'cancelled') showToast(tp('toast.exported', lang, { n: historyEntries.length }));
+              if (outcome !== 'cancelled') showToast(tp('toast.exported', lang, { n: historyCount }));
             } catch {
               showToast(t('toast.export_failed', lang));
             }
           }}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
+          className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
           style={{ color: 'var(--gm-text-primary)' }}
         >
           <div className="flex items-center gap-3">
@@ -545,7 +627,7 @@ function AdvancedSettingsContent() {
               showToast(t('toast.backup_exported', lang));
             } catch { showToast(t('toast.export_failed', lang)); }
           }}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
+          className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
           style={{ color: 'var(--gm-text-primary)' }}
         >
           <div className="flex items-center gap-3">
@@ -557,7 +639,7 @@ function AdvancedSettingsContent() {
         <div className="grain-separator" />
         <button
           onClick={() => openImportPicker('merge')}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
+          className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
           style={{ color: 'var(--gm-text-primary)' }}
         >
           <div className="flex items-center gap-3">
@@ -569,7 +651,7 @@ function AdvancedSettingsContent() {
         <div className="grain-separator" />
         <button
           onClick={openReplaceModal}
-          className="w-full flex justify-between items-center px-5 py-4 text-left"
+          className="w-full flex justify-between items-center px-5 py-4 grain-row text-left"
           style={{ color: '#EF4444' }}
         >
           <div className="flex items-center gap-3">
@@ -661,7 +743,7 @@ function AdvancedSettingsContent() {
           open={confirmClear}
           onOpenChange={setConfirmClear}
           title={t('settings.clear_confirm_title', lang)}
-          description={tp('settings.clear_confirm_desc', lang, { n: historyEntries.length })}
+          description={tp('settings.clear_confirm_desc', lang, { n: historyCount })}
           confirmLabel={t('settings.clear_confirm_action', lang)}
           cancelLabel={t('settings.cancel', lang)}
           hapticsEnabled={settings.hapticsEnabled}
@@ -671,6 +753,19 @@ function AdvancedSettingsContent() {
           }}
         />
       </div>
+
+      {/* ─── Thresholds — the VERY LAST section of the entire Settings page
+             (Advanced Settings → bottom): rare, deliberate, protective controls
+             sit at the deepest point of the hierarchy so nobody touches the
+             sliders unless it is genuinely necessary. ONE compact segmented
+             panel (moisture | temperature). ─── */}
+      <p className="text-[10px] font-bold tracking-[0.2em] uppercase mb-3 px-1 mt-2" style={{ color: 'var(--gm-text-tertiary)' }}>
+        {t('settings.thresholds', lang)}
+      </p>
+      <p className="text-[10px] leading-relaxed mb-3 px-1" style={{ color: 'var(--gm-text-tertiary)', opacity: 0.9 }}>
+        {t('settings.thresholds_note', lang)}
+      </p>
+      <ThresholdsPanel lang={lang} />
     </>
   );
 }
@@ -698,7 +793,12 @@ const THRESHOLD_ROW_META: Record<ThresholdKey, { labelKey: string; colorVar: str
 type ThresholdMetric = 'moisture' | 'temperature';
 
 function ThresholdsPanel({ lang }: { lang: AppLanguage }) {
-  const { settings, updateSettings, showToast } = useGrainStore();
+  /* Selector-based subscription — settings identity is stable while
+     readings stream, so slider dragging and packet arrival never fight
+     over re-renders. */
+  const settings = useGrainStore((s) => s.settings);
+  const updateSettings = useGrainStore((s) => s.updateSettings);
+  const showToast = useGrainStore((s) => s.showToast);
   const [metric, setMetric] = useState<ThresholdMetric>('moisture');
   const hapticsEnabled = settings.hapticsEnabled;
 

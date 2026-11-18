@@ -15,7 +15,7 @@ import type {
   StatusBadge,
   EngineCooldownState,
 } from './grain-types';
-import { DEFAULT_SETTINGS, GRAIN_PROFILES, GRAIN_OPTIONS, stateToRiskTheme } from './grain-types';
+import { DEFAULT_SETTINGS, GRAIN_PROFILES, GRAIN_OPTIONS, stateToRiskTheme, clampSamplingInterval } from './grain-types';
 import { evaluate, getStatusBadge } from './mochi-engine';
 import {
   saveReading,
@@ -149,6 +149,24 @@ function notifyMaCrossing(values: number[], win: number, movingAvgOn: boolean, h
   else if (dir === 'down') haptic(hapticsOn, 12);
 }
 
+/* ══ Sampling-interval gate (module-level, non-reactive) ══
+ * The probe PUSHES readings as BLE notifications at the firmware's own
+ * pace — there is no app-driven poll to schedule. This gate rate-limits
+ * which packets are CAPTURED into the app (displayed + stored): with an
+ * interval of N ms, only the first notification in each N-window is
+ * kept; intermediate packets are skipped. 0 = realtime = every packet
+ * (the fixed behavior before this setting existed). Timestamps come
+ * from the packets themselves, so web and native paths gate identically
+ * (native background monitoring still persists every packet on the Java
+ * side — its foreground-service dedupe is separate and unaffected).
+ * Not in the store: it must not trigger re-renders. */
+let lastAcceptedReadingTs = 0;
+
+function passesSamplingGate(packetTs: number, intervalMs: number): boolean {
+  if (intervalMs <= 0) return true; // realtime — accept every packet
+  return packetTs - lastAcceptedReadingTs >= intervalMs;
+}
+
 export const useGrainStore = create<GrainStore>((set, get) => ({
   /* ── Nav ── */
   activeTab: 'home',
@@ -280,6 +298,10 @@ export const useGrainStore = create<GrainStore>((set, get) => ({
     set({ deviceState: 'connected', hasDevice: true });
     get().showToast(tp('toast.device_connected', lang, { name: info.name }));
 
+    // Fresh session → the sampling gate restarts from scratch (the first
+    // packet of a new connection is always captured, whatever the interval).
+    lastAcceptedReadingTs = 0;
+
     bleOnReading((reading) => {
       get().handleReading(reading);
     });
@@ -330,7 +352,13 @@ export const useGrainStore = create<GrainStore>((set, get) => ({
     const stored = await getStoredSettings();
     // Merge with defaults so settings added in newer versions (e.g. hapticsEnabled)
     // are defined for settings persisted by older versions.
-    const settings: AppSettings = { ...DEFAULT_SETTINGS, ...stored };
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      samplingIntervalMs: clampSamplingInterval(
+        stored?.samplingIntervalMs ?? DEFAULT_SETTINGS.samplingIntervalMs,
+      ),
+    };
     set({ settings });
   },
 
@@ -388,6 +416,13 @@ export const useGrainStore = create<GrainStore>((set, get) => ({
     const { settings, deviceState } = get();
 
     if (deviceState === 'disconnected' || deviceState === 'connecting') return;
+
+    // ── SAMPLING GATE ──
+    // Rate-limits which incoming packets are captured (see the module-level
+    // comment above). Runs BEFORE any storage/evaluation work so skipped
+    // packets cost nothing — no IndexedDB write, no engine run, no re-render.
+    if (!passesSamplingGate(rawReading.timestamp, settings.samplingIntervalMs)) return;
+    lastAcceptedReadingTs = rawReading.timestamp;
 
     // ── GRAIN NORMALIZATION ──
     // settings.grainType is the single source of truth. The firmware grain code

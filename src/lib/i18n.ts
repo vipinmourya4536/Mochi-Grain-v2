@@ -231,6 +231,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.haptics': 'Haptic feedback',
     'settings.sound': 'Alert sound',
 
+    // ── Sampling interval (v2.2) ──
+    'settings.sampling': 'Sampling Interval',
+    'settings.sampling_desc': 'How often live probe readings are captured',
+    'settings.sampling_realtime': 'Realtime',
+    'settings.sampling_realtime_hint': 'Every packet',
+    'settings.sampling_hint': 'Gap between captured readings — packets in between are skipped.',
+    'toast.sampling_updated': 'Sampling interval: {v}',
+    'settings.thresholds_note': 'Rarely needed — grain profiles set these automatically.',
+
     'settings.data': 'Data',
     'settings.export_csv': 'Export CSV',
     'settings.export_decisions': 'Decision advice in CSV',
@@ -628,6 +637,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.wake_on_connect': 'कनेक्ट पर जगाएं',
     'settings.haptics': 'हैप्टिक फीडबैक',
     'settings.sound': 'अलर्ट ध्वनि',
+
+    // ── Sampling interval (v2.2) ──
+    'settings.sampling': 'सैंपलिंग अंतराल',
+    'settings.sampling_desc': 'प्रोब की लाइव रीडिंग कितनी देर में कैप्चर होती है',
+    'settings.sampling_realtime': 'रीयल-टाइम',
+    'settings.sampling_realtime_hint': 'हर पैकेट',
+    'settings.sampling_hint': 'कैप्चर की गई रीडिंग के बीच का अंतराल — बीच के पैकेट छोड़ दिए जाते हैं।',
+    'toast.sampling_updated': 'सैंपलिंग अंतराल: {v}',
+    'settings.thresholds_note': 'शायद ही कभी ज़रूरी — ग्रेन प्रोफ़ाइल इन्हें अपने आप सेट करती है।',
 
     'settings.data': 'डेटा',
     'settings.export_csv': 'CSV निर्यात',
@@ -1027,6 +1045,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.haptics': 'हॅप्टिक फीडबॅक',
     'settings.sound': 'अलर्ट आवाज',
 
+    // ── Sampling interval (v2.2) ──
+    'settings.sampling': 'नमुना मध्यांतर',
+    'settings.sampling_desc': 'प्रोबच्या लाइव्ह रीडिंग किती वेळाने नोंदवल्या जातात',
+    'settings.sampling_realtime': 'रिअल-टाइम',
+    'settings.sampling_realtime_hint': 'प्रत्येक पॅकेट',
+    'settings.sampling_hint': 'नोंदवलेल्या रीडिंगमधील अंतर — मधले पॅकेट वगळले जातात.',
+    'toast.sampling_updated': 'नमुना मध्यांतर: {v}',
+    'settings.thresholds_note': 'क्वचितच लागू — ग्रेन प्रोफाइल हे आपोआप सेट करते.',
+
     'settings.data': 'डेटा',
     'settings.export_csv': 'CSV निर्यात',
     'settings.export_decisions': 'CSV \u092e\u0927\u094d\u092f\u0947 \u0938\u0932\u094d\u0932\u093e \u0938\u092e\u093e\u0935\u093f\u0937\u094d\u091f \u0915\u0930\u093e',
@@ -1424,6 +1451,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.wake_on_connect': 'Wake on Connect',
     'settings.haptics': 'Haptic feedback',
     'settings.sound': 'Alert sound',
+
+    // ── Sampling interval (v2.2) ──
+    'settings.sampling': 'Sampling Interval',
+    'settings.sampling_desc': 'Probe readings kitne time gap pe capture hoti hain',
+    'settings.sampling_realtime': 'Realtime',
+    'settings.sampling_realtime_hint': 'Har packet',
+    'settings.sampling_hint': 'Captured readings ke beech ka gap — beech ke packets skip ho jate hain.',
+    'toast.sampling_updated': 'Sampling interval: {v}',
+    'settings.thresholds_note': 'Rarely chahiye — grain profiles ye apne aap set karte hain.',
 
     'settings.data': 'Data',
     'settings.export_csv': 'Export CSV',

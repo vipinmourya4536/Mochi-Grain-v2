@@ -15,7 +15,15 @@ import { BatteryHigh, BatteryLow, WifiSlash } from '@phosphor-icons/react/dist/s
  *   - language = utility action (compact rounded rectangle)
  */
 export function Header() {
-  const { deviceState, deviceInfo, settings, activeTab } = useGrainStore();
+  /* Selector-based subscription — the header displays connection state,
+     battery %, language and the settings-tab flag. Selecting the battery
+     NUMBER (not the deviceInfo object) keeps packet-driven deviceInfo
+     object churn (signal/grainType) from re-rendering the header; battery
+     itself only repaints when the displayed percent changes. */
+  const deviceState = useGrainStore((s) => s.deviceState);
+  const battery = useGrainStore((s) => (s.deviceInfo && s.deviceInfo.battery != null ? s.deviceInfo.battery : null));
+  const settings = useGrainStore((s) => s.settings);
+  const activeTab = useGrainStore((s) => s.activeTab);
   const lang = settings.language as AppLanguage;
   const online = useOnlineStatus();
 
@@ -25,7 +33,6 @@ export function Header() {
     ? { background: 'var(--gm-dot-offline, #71717a)', boxShadow: '0 0 8px var(--gm-dot-offline, #71717a)' }
     : {};
 
-  const battery = deviceInfo?.battery;
   const batteryLow = battery != null && battery < 20;
   const isSettings = activeTab === 'settings';
 

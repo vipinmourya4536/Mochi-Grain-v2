@@ -23,8 +23,12 @@ const TABS: { id: TabId; icon: typeof House; labelKey: string }[] = [
  * subtle ambient shadow, soft accent light bleeding through behind the active tab.
  */
 export function BottomNav() {
-  const { activeTab, setActiveTab, settings } = useGrainStore();
-  const lang = settings.language as AppLanguage;
+  /* Selector-based subscription — the nav repaints on tab/language/haptic
+     changes only; BLE packet churn never re-renders the navigation. */
+  const activeTab = useGrainStore((s) => s.activeTab);
+  const setActiveTab = useGrainStore((s) => s.setActiveTab);
+  const hapticsEnabled = useGrainStore((s) => s.settings.hapticsEnabled);
+  const lang = useGrainStore((s) => s.settings.language) as AppLanguage;
 
   return (
     <nav className="grain-floating-nav" aria-label="Primary">
@@ -36,7 +40,7 @@ export function BottomNav() {
               key={id}
               onClick={() => {
                 if (id === activeTab) return;
-                haptic(settings.hapticsEnabled, HAPTIC_TAP);
+                haptic(hapticsEnabled, HAPTIC_TAP);
                 setActiveTab(id);
               }}
               className={`grain-nav-btn ${isActive ? 'active' : ''}`}

@@ -1650,9 +1650,10 @@
 
 .grain-separator { height: 1px; background: var(--gm-separator); }
 
-.grain-accent-dot { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; border: 2.5px solid transparent; }
-.grain-accent-dot:active { transform: scale(0.9); }
-.grain-accent-dot.selected { border-color: var(--gm-text-primary); box-shadow: 0 0 0 3px var(--gm-accent-dim); }
+.grain-accent-dot { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease; border: 2.5px solid transparent; -webkit-tap-highlight-color: transparent; }
+.grain-accent-dot:active { transform: scale(0.86); }
+.grain-accent-dot.selected { border-color: var(--gm-text-primary); box-shadow: 0 0 0 3px var(--gm-accent-dim); transform: scale(1.14); }
+.grain-accent-dot:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--gm-surface-solid, #fff), 0 0 0 4px rgba(var(--gm-accent-rgb), 0.45); }
 
 .grain-range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: var(--gm-toggle-bg); outline: none; }
 .grain-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--gm-accent); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 2px solid var(--gm-surface-solid); }
@@ -1724,11 +1725,11 @@
   background: transparent;
   border: 1px solid var(--gm-border);
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.15s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   -webkit-tap-highlight-color: transparent;
   text-align: center;
 }
-.grain-grain-card:active { transform: scale(0.95); }
+.grain-grain-card:active { transform: scale(0.93); }
 .grain-grain-card.active {
   background: var(--gm-accent-dim);
   border-color: rgba(var(--gm-accent-rgb), 0.4);
@@ -2562,6 +2563,65 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   FLUID INTERACTION LAYER — v2.2 (sampling interval + settings reorder)
+   Rise-in cascade for staggered sections, spring press feedback for
+   full-width rows, accent-dot pop. Transform/opacity only (GPU-friendly,
+   no layout thrash), everything guarded by prefers-reduced-motion below.
+   ═══════════════════════════════════════════════════════════════ */
+
+@keyframes grain-rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered section entrance (Settings sections use this today; any
+   future list-like surface can adopt it). Children animate with a
+   ~30ms cadence; `backwards` fill keeps delayed children invisible
+   until their own window starts — no flash of unanimated content. */
+.grain-stagger > * {
+  animation: grain-rise-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.grain-stagger > *:nth-child(1)  { animation-delay: 0.02s; }
+.grain-stagger > *:nth-child(2)  { animation-delay: 0.05s; }
+.grain-stagger > *:nth-child(3)  { animation-delay: 0.08s; }
+.grain-stagger > *:nth-child(4)  { animation-delay: 0.11s; }
+.grain-stagger > *:nth-child(5)  { animation-delay: 0.14s; }
+.grain-stagger > *:nth-child(6)  { animation-delay: 0.17s; }
+.grain-stagger > *:nth-child(7)  { animation-delay: 0.20s; }
+.grain-stagger > *:nth-child(8)  { animation-delay: 0.23s; }
+.grain-stagger > *:nth-child(9)  { animation-delay: 0.26s; }
+.grain-stagger > *:nth-child(10) { animation-delay: 0.29s; }
+.grain-stagger > *:nth-child(11) { animation-delay: 0.32s; }
+.grain-stagger > *:nth-child(12) { animation-delay: 0.35s; }
+
+/* Expanding Advanced Settings reveals its sections with the same
+   cascade — children mount on expand, so the animations run then and
+   layer under the container's own max-height ease. */
+.grain-advanced-content > * {
+  animation: grain-rise-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.grain-advanced-content > *:nth-child(1)  { animation-delay: 0.02s; }
+.grain-advanced-content > *:nth-child(2)  { animation-delay: 0.06s; }
+.grain-advanced-content > *:nth-child(3)  { animation-delay: 0.10s; }
+.grain-advanced-content > *:nth-child(4)  { animation-delay: 0.14s; }
+.grain-advanced-content > *:nth-child(5)  { animation-delay: 0.18s; }
+.grain-advanced-content > *:nth-child(6)  { animation-delay: 0.22s; }
+.grain-advanced-content > *:nth-child(7)  { animation-delay: 0.26s; }
+.grain-advanced-content > *:nth-child(8)  { animation-delay: 0.30s; }
+.grain-advanced-content > *:nth-child(n + 9) { animation-delay: 0.34s; }
+
+/* Spring press feedback for full-width interactive rows (settings data
+   rows, probe controls, install row). The overshoot curve settles like a
+   physical control; disabled rows keep their layout untouched. */
+.grain-row {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.grain-row:active { transform: scale(0.98); }
+.grain-row:disabled,
+.grain-row[aria-disabled="true"] { transform: none; }
+
+/* ═══════════════════════════════════════════════════════════════
    REDUCED MOTION — v2.0 refinement additions
    ═══════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
@@ -2577,5 +2637,18 @@
   .grain-pslider-thumb,
   .grain-pslider-bubble {
     transition: none !important;
+  }
+  /* v2.2 fluid-interaction layer — same policy: motion off, layout intact. */
+  .grain-stagger > *,
+  .grain-advanced-content > * {
+    animation: none !important;
+  }
+  .grain-row,
+  .grain-row:active,
+  .grain-accent-dot,
+  .grain-accent-dot:active,
+  .grain-accent-dot.selected {
+    transition: none !important;
+    transform: none !important;
   }
 }
